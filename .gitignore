@@ -1,0 +1,21 @@
+./node_modules
+/node_modules
+/node_modules/**
+/node_modules/**/*
+./node_modules
+/node_modules/*
+./node_modules/*
+/node_modules/**/*
+/node_modules/
+./node_modules/
+/node_modules/
+node_modules
+/dist
+./dist
+./dist/*
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
