@@ -57,7 +57,7 @@ app.use(
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(",") || [
-      "http://localhost:3000",
+      "http://localhost:3000", "https://advv2-admin-rd34ohs9j-zorochan404s-projects.vercel.app"
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
@@ -122,8 +122,8 @@ app.use((req, res, next) => {
       status >= 200 && status < 300
         ? "✅"
         : status >= 400 && status < 500
-        ? "⚠️"
-        : "❌";
+          ? "⚠️"
+          : "❌";
 
     console.log(
       `${statusEmoji} [${requestId}] ${req.method} ${req.path} - ${status} (${duration}ms)`
