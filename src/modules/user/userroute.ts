@@ -15,12 +15,12 @@ import {
   updatePassword,
 } from "./usercontroller";
 import { verifyJWT } from "../middleware/auth";
-import { 
-  requirePermission, 
-  requireResourceAccess, 
-  Permission, 
-  requireAdmin, 
-  requireUser 
+import {
+  requirePermission,
+  requireResourceAccess,
+  Permission,
+  requireAdmin,
+  requireUser
 } from "../middleware/rbac";
 import {
   validateRequest,
@@ -42,32 +42,31 @@ const router: Router = express.Router();
 
 // Protected routes (require authentication)
 router.get(
-  "/getuser/:id", 
+  "/getuser/:id",
   verifyJWT,
-  requirePermission(Permission.READ_USER),
-  requireResourceAccess({ userIdParam: "id", checkOwnership: true }),
-  validateRequest(idParamSchema), 
+  requireResourceAccess({ userIdParam: "id", checkOwnership: false }),
+  validateRequest(idParamSchema),
   getUser
 );
 router.get(
-  "/getallusers", 
+  "/getallusers",
   verifyJWT,
   requirePermission(Permission.READ_USER),
-  validateRequest(paginationQuerySchema), 
+  validateRequest(paginationQuerySchema),
   getAllUsers
 );
 router.get(
-  "/search", 
+  "/search",
   verifyJWT,
   requirePermission(Permission.READ_USER),
-  validateRequest(userSearchSchema), 
+  validateRequest(userSearchSchema),
   searchUser
 );
 router.post(
-  "/getuserbyrole", 
+  "/getuserbyrole",
   verifyJWT,
   requirePermission(Permission.READ_USER),
-  validateRequest(userRoleSchema), 
+  validateRequest(userRoleSchema),
   getUserbyrole
 );
 
@@ -88,8 +87,6 @@ router.get(
 );
 router.post(
   "/addvendor",
-  verifyJWT,
-  requirePermission(Permission.CREATE_USER),
   validateRequest(userCreateSchema),
   addvendor
 );

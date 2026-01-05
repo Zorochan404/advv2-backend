@@ -231,9 +231,32 @@ export const unifiedLogin = asyncHandler(async (req: Request, res: Response) => 
 
 // User registration endpoint
 export const registerUser = asyncHandler(async (req: Request, res: Response) => {
-  const { number, name, email }: RegisterRequest = req.body;
+// Validate required fields
+  const {
+    number,
+    password,
+    role,
+    name,
+    email,
+    parkingid,
+    locality,
+    city,
+    state,
+    country,
+    pincode,
+    isverified,
+    avatar,
+    age,
+    aadharNumber,
+    aadharimg,
+    dlNumber,
+    dlimg,
+    passportNumber,
+    passportimg,
+    lat,
+    lng,
+  }: RegisterRequest = req.body;
 
-  // Validate required fields
   if (!number) {
     throw ApiError.badRequest("Phone number is required");
   }
@@ -266,14 +289,35 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
     }
 
     // Create new user
+     const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password!, saltRounds);
+
+    // Create new staff user
     const newUser = await db
       .insert(UserTable)
       .values({
         number: parseInt(number),
+        password: hashedPassword,
+        role: role as any,
         name: name || null,
         email: email || null,
-        role: "user",
-        isverified: false,
+        parkingid: parkingid || null,
+        locality: locality || null,
+        city: city || null,
+        state: state || null,
+        country: country || null,
+        pincode: pincode ? parseInt(pincode) : null,
+        isverified: isverified || false,
+        avatar: avatar || null,
+        age: age || null,
+        aadharNumber: aadharNumber || null,
+        aadharimg: aadharimg || null,
+        dlNumber: dlNumber || null,
+        dlimg: dlimg || null,
+        passportNumber: passportNumber || null,
+        passportimg: passportimg || null,
+        lat: lat || null,
+        lng: lng || null,
       })
       .returning();
 
@@ -284,6 +328,7 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
       user: userWithoutPassword,
       tokens,
     };
+
   }, "registerUser");
 
   return sendCreated(res, result, "User registered successfully");

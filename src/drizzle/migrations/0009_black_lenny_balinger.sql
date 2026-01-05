@@ -1,0 +1,1 @@
+ALTER TABLE "car_catalog" ADD COLUMN "estimation" jsonb DEFAULT '[]'::jsonb NOT NULL;

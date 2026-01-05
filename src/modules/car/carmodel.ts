@@ -14,6 +14,7 @@ import { reviewModel } from "../review/reviewmodel";
 import { UserTable } from "../user/usermodel";
 import { parkingTable } from "../parking/parkingmodel";
 import { bookingsTable } from "../booking/bookingmodel";
+import { array } from "zod";
 
 export const carStatusEnum = pgEnum("car_status", [
   "available",
@@ -53,6 +54,11 @@ export const carCatalogTable = pgTable("car_catalog", {
   imageUrl: varchar("image_url", { length: 500 }),
   isActive: boolean("is_active").notNull().default(true),
   category: varchar("category", { length: 100 }).default("sedan"), // sedan, suv, hatchback, luxury, etc.
+  estimation: jsonb("estimation")
+    .$type<{ location: string; estimatedPrice: number }[]>()
+    .notNull()
+    .default([]),
+
   createdBy: integer("created_by").references(() => UserTable.id, {
     onDelete: "cascade",
   }),

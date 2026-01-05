@@ -12,16 +12,16 @@ import {
   getParkingApprovalRequests,
   updateParkingApprovalStatus,
   getUserParkingApprovalRequests,
+  getparkingrequestbyid,
 } from "./parkingcontroller";
 import { verifyJWT } from "../middleware/auth";
-import { 
-  requirePermission, 
-  requireResourceAccess, 
-  Permission, 
-  requireAdmin 
+import {
+  requirePermission,
+  requireResourceAccess,
+  Permission,
+  requireAdmin
 } from "../middleware/rbac";
 import {
-  validateRequest,
   idParamSchema,
   parkingCreateSchema,
   parkingUpdateSchema,
@@ -31,6 +31,7 @@ import {
   parkingApprovalCreateSchema,
   parkingApprovalUpdateSchema,
   parkingApprovalFilterSchema,
+  validateRequest,
 } from "../utils/validation";
 
 const router: Router = express.Router();
@@ -82,17 +83,25 @@ router.delete(
 router.post(
   "/submit-approval",
   verifyJWT,
-  requirePermission(Permission.CREATE_PARKING),
   validateRequest(parkingApprovalCreateSchema),
   submitParkingApproval
 );
 
 // User gets their parking approval requests
 router.get(
-  "/my-approval-requests", 
-  verifyJWT, 
+  "/my-approval-requests",
+  verifyJWT,
   requirePermission(Permission.READ_PARKING),
   getUserParkingApprovalRequests
+);
+
+
+router.get(
+  "/getapprovalbyid/:id",
+  verifyJWT,
+  requirePermission(Permission.READ_PARKING),
+  validateRequest(idParamSchema),
+  getparkingrequestbyid
 );
 
 // Admin gets all parking approval requests

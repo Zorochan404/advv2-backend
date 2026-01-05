@@ -465,6 +465,35 @@ export const getParkingByIDadmin = asyncHandler(
   }
 );
 
+
+export const getparkingrequestbyid = asyncHandler(
+  async (req: Request & { user?: { id?: number; role?: string } }, res: Response) => {
+    if (!req.user || req.user.role !== "admin") {
+      throw ApiError.forbidden("Only admin can get parking requests");
+    }
+
+    if (!req.user.id) {
+      throw ApiError.unauthorized("User ID not found");
+    }
+    const id = req.params.id;
+
+    const result = await withDatabaseErrorHandling(async () => {
+      const parking = await db
+        .select()
+        .from(parkingApprovalTable)
+        .where(eq(parkingApprovalTable.id, parseInt(id)));
+
+      if (parking.length === 0) {
+        throw ApiError.notFound("Parking request not found");
+      }
+
+      return parking[0];
+    }, "getparkingrequestbyid");
+
+    return sendItem(res, result, "Parking request fetched successfully");
+  }
+);
+
 // New methods for parking approval flow
 
 // User submits parking approval request

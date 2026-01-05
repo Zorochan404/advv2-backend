@@ -396,19 +396,60 @@ export const getusersbyvendor = asyncHandler(
   }
 );
 
-export const addvendor = asyncHandler(
-  async (req: Request & { user?: { role?: string } }, res: Response) => {
-    const user = await withDatabaseErrorHandling(async () => {
-      const newUser = await db.insert(UserTable).values(req.body).returning();
+export const addvendor = asyncHandler(async (req: Request, res: Response) => {
+  const user = await withDatabaseErrorHandling(async () => {
+    const {
+      password,
+      role: _roleFromClient,
+      ...rest
+    } = req.body as {
+      password?: string;
+      role?: string;
+      [key: string]: any;
+    };
 
-      // Remove password from user object
-      const { password, ...userWithoutPassword } = newUser[0];
-      return userWithoutPassword;
-    }, "addvendor");
+    // Check if a vendor with this number already exists
+    if (rest.number) {
+      const existingVendor = await db
+        .select()
+        .from(UserTable)
+        .where(
+          and(
+            eq(UserTable.number, Number(rest.number)),
+            eq(UserTable.role, "vendor" as any)
+          )
+        );
 
-    return sendSuccess(res, user, "Vendor added successfully");
-  }
-);
+      if (existingVendor.length > 0) {
+        throw ApiError.conflict(
+          "Vendor with this phone number already exists"
+        );
+      }
+    }
+
+    // Hash password if provided
+    let hashedPassword: string | undefined;
+    if (password) {
+      const saltRounds = 12;
+      hashedPassword = await bcrypt.hash(password, saltRounds);
+    }
+
+    const newUser = await db
+      .insert(UserTable)
+      .values({
+        ...rest,
+        role: "vendor", // Force role to vendor for self-registration
+        ...(hashedPassword ? { password: hashedPassword } : {}),
+      })
+      .returning();
+
+    // Remove password from user object
+    const { password: _pwd, ...userWithoutPassword } = newUser[0];
+    return userWithoutPassword;
+  }, "addvendor");
+
+  return sendSuccess(res, user, "Vendor registered successfully");
+});
 
 export const getParkingInchargeByNumber = asyncHandler(
   async (req: Request & { user?: { role?: string } }, res: Response) => {

@@ -40,6 +40,7 @@ export const createCarCatalog = asyncHandler(
       features,
       imageUrl,
       category,
+      estimation,
     } = req.body;
 
     // Validate required fields
@@ -71,6 +72,7 @@ export const createCarCatalog = asyncHandler(
           imageUrl: imageUrl,
           category: category || "sedan",
           createdBy: req.user!.id,
+          estimation: estimation,
         })
         .returning();
 
@@ -728,7 +730,7 @@ export const getCategoriesWithCounts = asyncHandler(
       throw ApiError.forbidden("Only admins can view category counts");
     }
 
-      const categoriesWithCounts = await withDatabaseErrorHandling(async () => {
+    const categoriesWithCounts = await withDatabaseErrorHandling(async () => {
       // Get all categories with their counts using Drizzle queries
       const allCategories = await db.select({
         category: carCatalogTable.category,

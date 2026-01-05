@@ -1,0 +1,2 @@
+ALTER TABLE "car_request" ADD COLUMN "vcarid" integer;--> statement-breakpoint
+ALTER TABLE "car_request" ADD CONSTRAINT "car_request_vcarid_car_id_fk" FOREIGN KEY ("vcarid") REFERENCES "public"."car"("id") ON DELETE cascade ON UPDATE no action;

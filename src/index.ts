@@ -23,6 +23,7 @@ import adminCarsRouter from "./modules/admin/admincarsroutes";
 import adminParkingRouter from "./modules/admin/adminparkingroutes";
 import adminPaymentRouter from "./modules/admin/adminpaymentroutes";
 import adminVendorRouter from "./modules/admin/adminvendorroutes";
+import carRequestRouter from "./modules/car/carrequest.routes";
 
 // Import error handling utilities
 import {
@@ -161,6 +162,7 @@ app.use("/api/v1/admin/cars", adminCarsRouter);
 app.use("/api/v1/admin/parking", adminParkingRouter);
 app.use("/api/v1/admin/payments", adminPaymentRouter);
 app.use("/api/v1/admin/vendors", adminVendorRouter);
+app.use("/api/v1/car-request", carRequestRouter);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);
