@@ -749,7 +749,7 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
     const avgRating =
       validRatings.length > 0
         ? validRatings.reduce((acc, rating) => acc + rating, 0) /
-          validRatings.length
+        validRatings.length
         : 0;
 
     // Get user details for reviews
@@ -812,7 +812,7 @@ export const createCar = asyncHandler(
 
     if (
       !req.user ||
-      (req.user.role !== "admin" && req.user.role !== "vendor")
+      (req.user.role !== "admin" && req.user.role !== "parkingincharge")
     ) {
       throw ApiError.forbidden("You are not authorized to create cars");
     }
@@ -824,9 +824,8 @@ export const createCar = asyncHandler(
     }
 
     // Add request deduplication check
-    const requestId = `${req.user.id || "unknown"}-${
-      req.body.number
-    }-${Date.now()}`;
+    const requestId = `${req.user.id || "unknown"}-${req.body.number
+      }-${Date.now()}`;
 
     console.log(`🚗 [CREATE_CAR] Creating car with request ID: ${requestId}`);
 
@@ -845,14 +844,14 @@ export const createCar = asyncHandler(
           `Car with number ${req.body.number} already exists`
         );
       }
-      
+
       // Create a copy of the request body to modify
       const carData = { ...req.body };
-      
+
       // If catalogId is provided, fetch price and discountprice from catalog
       if (carData.catalogId) {
         console.log(`🚗 [CREATE_CAR] Fetching price from catalog ID: ${carData.catalogId}`);
-        
+
         const catalogEntry = await db
           .select({
             platformPrice: carCatalogTable.carPlatformPrice,
@@ -861,13 +860,13 @@ export const createCar = asyncHandler(
           .from(carCatalogTable)
           .where(eq(carCatalogTable.id, carData.catalogId))
           .limit(1);
-        
+
         if (catalogEntry.length > 0) {
           // Use platform price as the regular price
           carData.price = Number(catalogEntry[0].platformPrice);
           // Use vendor price as the discount price
           carData.discountprice = Number(catalogEntry[0].vendorPrice);
-          
+
           console.log(`🚗 [CREATE_CAR] Inferred price: ${carData.price}, discount price: ${carData.discountprice}`);
         } else {
           console.log(`🚗 [CREATE_CAR] Warning: Catalog ID ${carData.catalogId} not found`);
@@ -891,9 +890,8 @@ export const updateCar = asyncHandler(
     req: Request & { user?: { id?: number; role?: string } },
     res: Response
   ) => {
-    const requestId = `${req.user?.id || "unknown"}-${
-      req.params.id
-    }-${Date.now()}`;
+    const requestId = `${req.user?.id || "unknown"}-${req.params.id
+      }-${Date.now()}`;
     console.log(
       `🚗 [UPDATE_CAR] Starting update for car ${req.params.id}, Request ID: ${requestId}`
     );
