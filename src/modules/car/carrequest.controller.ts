@@ -50,7 +50,8 @@ export const getMyCarRequests = asyncHandler(async (req: Request, res: Response)
             createdAt: carRequestTable.createdAt,
             parkingName: parkingTable.name,
             carName: carCatalogTable.carName,
-            carMaker: carCatalogTable.carMaker
+            carMaker: carCatalogTable.carMaker,
+            carid: carRequestTable.carid
         })
             .from(carRequestTable)
             .leftJoin(carCatalogTable, eq(carRequestTable.carcatalogid, carCatalogTable.id))
