@@ -10,6 +10,7 @@ export const carRequestTable = pgTable("car_request", {
     id: serial("id").primaryKey(),
     vendorid: integer("vendorid").references(() => UserTable.id, { onDelete: "cascade" }).notNull(),
     carcatalogid: integer("carcatalogid").references(() => carCatalogTable.id, { onDelete: "cascade" }).notNull(),
+    carid: integer("carid").references(() => carModel.id, { onDelete: "cascade" }),
     parkingid: integer("parkingid").references(() => parkingTable.id, { onDelete: "cascade" }),
     denialreason: varchar("denialreason", { length: 255 }),
     status: carRequestStatusEnum("status"),

@@ -194,6 +194,7 @@ export const approveCarRequest = asyncHandler(async (req: Request, res: Response
         const [updated] = await db.update(carRequestTable)
             .set({
                 status: "APPROVED",
+                carid: req.body.carid,
                 updatedAt: new Date()
             })
             .where(eq(carRequestTable.id, parseInt(id)))
