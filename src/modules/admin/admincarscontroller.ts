@@ -15,9 +15,11 @@ interface CarData {
   maker: string;
   year: number;
   carnumber: string;
-  price: number;
-  insurancePrice: number;
-  discountedprice: number;
+  price: number | null;
+  insurancePrice: number | null;
+  discountedprice: number | null;
+  fineperhour: number | null;
+  extensionperhour: number | null;
   color: string;
   transmission: string;
   fuel: string;
@@ -242,6 +244,8 @@ export const getAllCars = asyncHandler(async (req: Request, res: Response) => {
         price: carModel.price,
         discountprice: carModel.discountprice,
         insuranceAmount: carModel.insuranceAmount,
+        fineperhour: carModel.fineperhour,
+        extensionperhour: carModel.extensionperhour,
         inmaintainance: carModel.inmaintainance,
         isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
@@ -295,6 +299,8 @@ export const getAllCars = asyncHandler(async (req: Request, res: Response) => {
       price: car.price,
       insurancePrice: Number(car.insuranceAmount) || 0,
       discountedprice: car.discountprice || car.price,
+      fineperhour: car.fineperhour || null,
+      extensionperhour: car.extensionperhour || null,
       color: car.color || 'Unknown',
       transmission: car.transmission || 'manual',
       fuel: car.fuel || 'petrol',
@@ -389,6 +395,8 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
         price: carModel.price,
         discountprice: carModel.discountprice,
         insuranceAmount: carModel.insuranceAmount,
+        fineperhour: carModel.fineperhour,
+        extensionperhour: carModel.extensionperhour,
         inmaintainance: carModel.inmaintainance,
         isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
@@ -443,9 +451,11 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
       maker: carData.maker || 'Unknown',
       year: carData.year || new Date().getFullYear(),
       carnumber: carData.number,
-      price: carData.price,
+      price: carData.price || 0,
       insurancePrice: Number(carData.insuranceAmount) || 0,
-      discountedprice: carData.discountprice || carData.price,
+      discountedprice: carData.discountprice || carData.price || 0,
+      fineperhour: carData.fineperhour || null,
+      extensionperhour: carData.extensionperhour || null,
       color: carData.color || 'Unknown',
       transmission: carData.transmission || 'manual',
       fuel: carData.fuel || 'petrol',
@@ -519,7 +529,7 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
 
     // Prepare update data for car table
     const carUpdateData: any = {};
-    
+
     // Map the incoming data to car model fields
     if (updateData.name !== undefined) carUpdateData.name = updateData.name;
     if (updateData.price !== undefined) carUpdateData.price = updateData.price;
@@ -550,7 +560,7 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
 
     // Prepare update data for catalog table
     const catalogUpdateData: any = {};
-    
+
     if (updateData.maker !== undefined) catalogUpdateData.carMaker = updateData.maker;
     if (updateData.year !== undefined) catalogUpdateData.carModelYear = updateData.year;
     if (updateData.transmission !== undefined) catalogUpdateData.transmission = updateData.transmission;
@@ -580,6 +590,8 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
         price: carModel.price,
         discountprice: carModel.discountprice,
         insuranceAmount: carModel.insuranceAmount,
+        fineperhour: carModel.fineperhour,
+        extensionperhour: carModel.extensionperhour,
         inmaintainance: carModel.inmaintainance,
         isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
@@ -634,9 +646,9 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
       maker: carData.maker || 'Unknown',
       year: carData.year || new Date().getFullYear(),
       carnumber: carData.number,
-      price: carData.price,
+      price: carData.price || 0,
       insurancePrice: Number(carData.insuranceAmount) || 0,
-      discountedprice: carData.discountprice || carData.price,
+      discountedprice: carData.discountprice || carData.price || 0,
       color: carData.color || 'Unknown',
       transmission: carData.transmission || 'manual',
       fuel: carData.fuel || 'petrol',
@@ -648,6 +660,8 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
       insuranceimg: carData.insuranceimg || '',
       inmaintainance: carData.inmaintainance,
       isavailable: carData.isavailable,
+      fineperhour: carData.fineperhour || 0,
+      extensionperhour: carData.extensionperhour || 0,
       images: carData.images || null,
       mainimg: carData.images?.[0] || '',
       vendorid: carData.vendorid,
@@ -694,7 +708,7 @@ export const updateCarStatus = asyncHandler(async (req: Request, res: Response) 
 
   try {
     let updateData: any = {};
-    
+
     if (status === 'available') {
       updateData = { isavailable: true, inmaintainance: false };
     } else if (status === 'rented') {
@@ -794,6 +808,8 @@ export const getCarsByBookingDateRange = asyncHandler(async (req: Request, res: 
         price: carModel.price,
         discountprice: carModel.discountprice,
         insuranceAmount: carModel.insuranceAmount,
+        fineperhour: carModel.fineperhour,
+        extensionperhour: carModel.extensionperhour,
         inmaintainance: carModel.inmaintainance,
         isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
@@ -832,11 +848,13 @@ export const getCarsByBookingDateRange = asyncHandler(async (req: Request, res: 
       maker: car.maker || 'Unknown',
       year: car.year || new Date().getFullYear(),
       carnumber: car.number,
-      price: car.price,
+      price: car.price || null,
       insurancePrice: Number(car.insuranceAmount) || 0,
-      discountedprice: car.discountprice || car.price,
+      discountedprice: car.discountprice || car.price || null,
       color: car.color || 'Unknown',
       transmission: car.transmission || 'manual',
+      fineperhour: car.fineperhour || null,
+      extensionperhour: car.extensionperhour || null,
       fuel: car.fuel || 'petrol',
       type: car.type || 'sedan',
       seats: car.seats || 5,

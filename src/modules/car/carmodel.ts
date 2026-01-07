@@ -77,8 +77,10 @@ export const carModel = pgTable("car", {
     .references(() => parkingTable.id, { onDelete: "cascade" })
     .notNull(),
   color: varchar("color", { length: 255 }),
-  price: integer("price").notNull(),
+  price: integer("price"),
   discountprice: integer("discountprice"),
+  fineperhour: integer("fineperhour"),
+  extensionperhour: integer("extensionperhour"),
   inmaintainance: boolean("inmaintainance").notNull().default(false),
   isavailable: boolean("isavailable").notNull().default(true),
   // Insurance amount for the car (default 500)  

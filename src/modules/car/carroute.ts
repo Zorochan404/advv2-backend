@@ -80,7 +80,6 @@ router.post(
 router.post(
   "/add",
   verifyJWT,
-  requirePermission(Permission.CREATE_CAR),
   validateRequest(carCreateSchema),
   createCar
 );
