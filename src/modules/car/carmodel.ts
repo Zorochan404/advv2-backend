@@ -21,6 +21,8 @@ export const carStatusEnum = pgEnum("car_status", [
   "booked",
   "maintenance",
   "unavailable",
+  "out_of_service",
+
 ]);
 
 export const transmissionEnum = pgEnum("transmission", ["manual", "automatic"]);
@@ -79,10 +81,8 @@ export const carModel = pgTable("car", {
   color: varchar("color", { length: 255 }),
   price: integer("price"),
   discountprice: integer("discountprice"),
-  fineperhour: integer("fineperhour"),
-  extensionperhour: integer("extensionperhour"),
-  inmaintainance: boolean("inmaintainance").notNull().default(false),
-  isavailable: boolean("isavailable").notNull().default(true),
+  fineperhour: integer("fineperhour").default(0),
+  extensionperhour: integer("extensionperhour").default(0),
   // Insurance amount for the car (default 500)  
   insuranceAmount: decimal("insurance_amount", { precision: 10, scale: 2 }).notNull().default("500"),
   // Restored critical fields

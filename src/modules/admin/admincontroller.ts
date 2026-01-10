@@ -120,7 +120,7 @@ export const getDashboardData = asyncHandler(async (req: Request, res: Response)
 
     // Car availability calculation
     const totalCars = carsData.length;
-    const availableCars = carsData.filter(c => c.isavailable).length;
+    const availableCars = carsData.filter(c => c.status === 'available').length;
     const rentedCars = carsData.filter(c => c.status === 'booked').length;
     const maintenanceCars = carsData.filter(c => c.status === 'maintenance').length;
     const outOfServiceCars = carsData.filter(c => c.status === 'unavailable').length;
@@ -265,7 +265,7 @@ export const getDashboardMetrics = asyncHandler(async (req: Request, res: Respon
     const totalUsersCount = usersData[0]?.count || 0;
 
     const totalCars = carsData.length;
-    const availableCars = carsData.filter(c => c.isavailable).length;
+    const availableCars = carsData.filter(c => c.status === 'available').length;
     const availabilityRate = totalCars > 0 ? ((availableCars / totalCars) * 100).toFixed(1) : '0.0';
 
     const metrics = {
@@ -297,7 +297,7 @@ export const getCarAvailability = asyncHandler(async (req: Request, res: Respons
     const carsData = await db.select().from(car);
 
     const totalCars = carsData.length;
-    const availableCars = carsData.filter(c => c.isavailable).length;
+    const availableCars = carsData.filter(c => c.status === 'available').length;
     const rentedCars = carsData.filter(c => c.status === 'booked').length;
     const maintenanceCars = carsData.filter(c => c.status === 'maintenance').length;
     const outOfServiceCars = carsData.filter(c => c.status === 'unavailable').length;
@@ -741,8 +741,7 @@ export const getParkingsList = asyncHandler(async (req: Request, res: Response) 
           .from(car)
           .where(and(
             eq(car.parkingid, parking.id),
-            eq(car.isavailable, true),
-            eq(car.inmaintainance, false)
+            eq(car.status, 'available'),
           ));
 
         const totalCars = totalCarsResult[0]?.count || 0;
@@ -1062,8 +1061,6 @@ export const getBookingById = asyncHandler(async (req: Request, res: Response) =
         carRcImg: car.rcimg,
         carPollutionImg: car.pollutionimg,
         carInsuranceImg: car.insuranceimg,
-        carInMaintenance: car.inmaintainance,
-        carIsAvailable: car.isavailable,
         carImages: car.images,
         carMainImg: car.images,
         carVendorId: car.vendorid,
@@ -1176,8 +1173,6 @@ export const getBookingById = asyncHandler(async (req: Request, res: Response) =
         rcimg: booking.carRcImg,
         pollutionimg: booking.carPollutionImg,
         insuranceimg: booking.carInsuranceImg,
-        inmaintainance: booking.carInMaintenance,
-        isavailable: booking.carIsAvailable,
         images: booking.carImages || [],
         mainimg: booking.carMainImg,
         vendorid: booking.carVendorId,

@@ -92,8 +92,6 @@ export const getAllVendors = asyncHandler(async (req: Request, res: Response) =>
             name: car.name,
             number: car.number,
             price: car.price,
-            isavailable: car.isavailable,
-            inmaintainance: car.inmaintainance,
             status: car.status,
             images: car.images,
             createdAt: car.createdAt,
@@ -184,8 +182,6 @@ export const getVendorById = asyncHandler(async (req: Request, res: Response) =>
         name: car.name,
         number: car.number,
         price: car.price,
-        isavailable: car.isavailable,
-        inmaintainance: car.inmaintainance,
         status: car.status,
         images: car.images,
         createdAt: car.createdAt,
@@ -508,8 +504,6 @@ export const getVendorCars = asyncHandler(async (req: Request, res: Response) =>
         model: car.name, // Using name as model for now
         licensePlate: car.number,
         mainimg: car.images,
-        isavailable: car.isavailable,
-        inmaintainance: car.inmaintainance,
         createdAt: car.createdAt,
         vendorId: car.vendorid,
       })

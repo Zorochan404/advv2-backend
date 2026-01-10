@@ -493,7 +493,6 @@ export const deletebooking = asyncHandler(
         .update(carModel)
         .set({ 
           status: "available",
-          isavailable: true 
         })
         .where(eq(carModel.id, bookingToDelete.carId));
     }
@@ -2083,7 +2082,6 @@ export const confirmCarPickup = asyncHandler<AuthenticatedRequest>(
       .update(carModel)
       .set({ 
         status: "booked",
-        isavailable: false 
       })
       .where(eq(carModel.id, booking.carId));
 
@@ -2247,7 +2245,6 @@ export const confirmCarReturn = asyncHandler<AuthenticatedRequest>(
       .update(carModel)
       .set({ 
         status: "available",
-        isavailable: true 
       })
       .where(eq(carModel.id, booking.carId));
 
@@ -3371,8 +3368,6 @@ export const getAllBookings = asyncHandler<AuthenticatedRequest>(
             color: carModel.color,
             price: carModel.price,
             discountprice: carModel.discountprice,
-            inmaintainance: carModel.inmaintainance,
-            isavailable: carModel.isavailable,
             rcnumber: carModel.rcnumber,
             rcimg: carModel.rcimg,
             pollutionimg: carModel.pollutionimg,

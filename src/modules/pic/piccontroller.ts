@@ -242,8 +242,6 @@ export const getAllCarsUnderPIC = asyncHandler<AuthenticatedRequest>(
       price: car.price,
       discountPrice: car.discountprice,
       color: car.color,
-      inMaintenance: car.inmaintainance,
-      isAvailable: car.isavailable,
       status: car.status,
       maker: car.catalog?.carMaker,
       year: car.catalog?.carModelYear,

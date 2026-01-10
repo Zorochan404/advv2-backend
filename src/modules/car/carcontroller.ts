@@ -93,8 +93,6 @@ export const getNearestCars = asyncHandler(
           price: carModel.price,
           discountprice: carModel.discountprice,
           color: carModel.color,
-          inmaintainance: carModel.inmaintainance,
-          isavailable: carModel.isavailable,
           rcnumber: carModel.rcnumber,
           rcimg: carModel.rcimg,
           pollutionimg: carModel.pollutionimg,
@@ -198,8 +196,6 @@ export const getNearestAvailableCars = asyncHandler(
           )) <= ${radius}
         `,
         // Basic availability conditions
-        eq(carModel.isavailable, true),
-        eq(carModel.inmaintainance, false),
         eq(carModel.status, "available"),
       ];
 
@@ -307,8 +303,6 @@ export const getNearestAvailableCars = asyncHandler(
           price: carModel.price,
           discountprice: carModel.discountprice,
           color: carModel.color,
-          inmaintainance: carModel.inmaintainance,
-          isavailable: carModel.isavailable,
           rcnumber: carModel.rcnumber,
           rcimg: carModel.rcimg,
           pollutionimg: carModel.pollutionimg,
@@ -371,6 +365,14 @@ export const getNearestAvailableCars = asyncHandler(
   }
 );
 
+export const getavailablecars = asyncHandler(async (req: Request, res: Response) => {
+  const cars = await withDatabaseErrorHandling(async () => {
+    return await db.select().from(carModel).where(eq(carModel.status, "available"));
+  }, "getavailablecars");
+
+  return sendList(res, cars, cars.length, "Cars fetched successfully");
+});
+
 export const getNearestPopularCars = asyncHandler(
   async (req: Request, res: Response) => {
     // Support both GET (query params) and POST (body)
@@ -416,8 +418,6 @@ export const getNearestPopularCars = asyncHandler(
                     sin(radians(${parkingTable.lat}))
                 )) <= ${radius}
             `,
-            eq(carModel.isavailable, true),
-            eq(carModel.inmaintainance, false),
             eq(carModel.status, "available")
           )
         );
@@ -433,8 +433,6 @@ export const getNearestPopularCars = asyncHandler(
           price: carModel.price,
           discountprice: carModel.discountprice,
           color: carModel.color,
-          inmaintainance: carModel.inmaintainance,
-          isavailable: carModel.isavailable,
           rcnumber: carModel.rcnumber,
           rcimg: carModel.rcimg,
           pollutionimg: carModel.pollutionimg,
@@ -489,8 +487,6 @@ export const getNearestPopularCars = asyncHandler(
                     sin(radians(${parkingTable.lat}))
                 )) <= ${radius}
             `,
-            eq(carModel.isavailable, true),
-            eq(carModel.inmaintainance, false),
             eq(carModel.status, "available")
           )
         )
@@ -501,8 +497,6 @@ export const getNearestPopularCars = asyncHandler(
           carModel.price,
           carModel.discountprice,
           carModel.color,
-          carModel.inmaintainance,
-          carModel.isavailable,
           carModel.rcnumber,
           carModel.rcimg,
           carModel.pollutionimg,
@@ -581,8 +575,6 @@ export const getCarByParkingId = asyncHandler(
           price: carModel.price,
           discountprice: carModel.discountprice,
           color: carModel.color,
-          inmaintainance: carModel.inmaintainance,
-          isavailable: carModel.isavailable,
           rcnumber: carModel.rcnumber,
           rcimg: carModel.rcimg,
           pollutionimg: carModel.pollutionimg,
@@ -623,6 +615,77 @@ export const getCarByParkingId = asyncHandler(
   }
 );
 
+
+export const getCarByParkingIdbyuser = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { limit = 10, page = 1 } = req.query;
+
+    if (!id || !/^[0-9]+$/.test(id)) {
+      throw ApiError.badRequest("Invalid parking ID");
+    }
+
+    const limitNum = Math.min(parseInt(limit as string) || 10, 50);
+    const pageNum = Math.max(parseInt(page as string) || 1, 1);
+    const offset = (pageNum - 1) * limitNum;
+
+    const result = await withDatabaseErrorHandling(async () => {
+      // Get total count for pagination
+      const totalCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(carModel)
+        .where(and(eq(carModel.parkingid, parseInt(id)), eq(carModel.status, "available")));
+
+      const total = totalCount[0]?.count || 0;
+
+      // Get cars with catalog data
+      const cars = await db
+        .select({
+          id: carModel.id,
+          name: carModel.name,
+          number: carModel.number,
+          price: carModel.price,
+          discountprice: carModel.discountprice,
+          color: carModel.color,
+          rcnumber: carModel.rcnumber,
+          rcimg: carModel.rcimg,
+          pollutionimg: carModel.pollutionimg,
+          insuranceimg: carModel.insuranceimg,
+          images: carModel.images,
+          vendorid: carModel.vendorid,
+          parkingid: carModel.parkingid,
+          status: carModel.status,
+          createdAt: carModel.createdAt,
+          updatedAt: carModel.updatedAt,
+          // Catalog data
+          maker: carCatalogTable.carMaker,
+          year: carCatalogTable.carModelYear,
+          engineCapacity: carCatalogTable.engineCapacity,
+          mileage: carCatalogTable.mileage,
+          features: carCatalogTable.features,
+          transmission: carCatalogTable.transmission,
+          fuel: carCatalogTable.fuelType,
+          seats: carCatalogTable.seats,
+        })
+        .from(carModel)
+        .leftJoin(carCatalogTable, eq(carModel.catalogId, carCatalogTable.id))
+        .where(eq(carModel.parkingid, parseInt(id)))
+        .limit(limitNum)
+        .offset(offset);
+
+      return { cars, total };
+    }, "getCarByParkingId");
+
+    return sendPaginated(
+      res,
+      result.cars,
+      result.total,
+      pageNum,
+      limitNum,
+      "Cars by parking ID fetched successfully"
+    );
+  }
+);
 export const searchbynameornumber = asyncHandler(
   async (req: Request, res: Response) => {
     // Support both GET (query params) and POST (body)
@@ -641,8 +704,6 @@ export const searchbynameornumber = asyncHandler(
           price: carModel.price,
           discountprice: carModel.discountprice,
           color: carModel.color,
-          inmaintainance: carModel.inmaintainance,
-          isavailable: carModel.isavailable,
           rcnumber: carModel.rcnumber,
           rcimg: carModel.rcimg,
           pollutionimg: carModel.pollutionimg,
@@ -694,8 +755,6 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
         price: carModel.price,
         discountprice: carModel.discountprice,
         color: carModel.color,
-        inmaintainance: carModel.inmaintainance,
-        isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
         rcimg: carModel.rcimg,
         pollutionimg: carModel.pollutionimg,
@@ -706,6 +765,10 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
         status: carModel.status,
         createdAt: carModel.createdAt,
         updatedAt: carModel.updatedAt,
+        category: carCatalogTable.category,
+        insuranceamount: carModel.insuranceAmount,
+        fineperhour: carModel.fineperhour,
+        extensionperhour: carModel.extensionperhour,
         // Catalog data
         maker: carCatalogTable.carMaker,
         year: carCatalogTable.carModelYear,
@@ -772,25 +835,11 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
     });
 
     return {
-      carId: car.id,
-      carName: car.name,
-      parkingName: parking[0]?.name || "Unknown",
-      overallRating: avgRating,
-      totalReviews: reviews.length,
-      fuel: car.fuel || "Unknown",
-      transmission: car.transmission || "Unknown",
-      seats: car.seats || 5,
-      lat: parking[0]?.lat || 0,
-      lng: parking[0]?.lng || 0,
-      customerReviews: reviewsWithUsers.map((review) => ({
-        name: review.user?.name || "Anonymous",
-        comment: review.comment,
-        rating: review.rating,
-      })),
-      pricingPerDay: car.discountprice || car.price || 0,
-      offeredPrice: car.discountprice || car.price || 0,
-      imageUrl: car.images?.[0] || null,
-      carNumber: car.number,
+      car,
+      reviews,
+      parking,
+      avgRating,
+      reviewsWithUsers,
     };
   }, "getCarById");
 
@@ -855,7 +904,6 @@ export const createCar = asyncHandler(
         const catalogEntry = await db
           .select({
             platformPrice: carCatalogTable.carPlatformPrice,
-            vendorPrice: carCatalogTable.carVendorPrice
           })
           .from(carCatalogTable)
           .where(eq(carCatalogTable.id, carData.catalogId))
@@ -864,8 +912,8 @@ export const createCar = asyncHandler(
         if (catalogEntry.length > 0) {
           // Use platform price as the regular price
           carData.price = Number(catalogEntry[0].platformPrice);
-          // Use vendor price as the discount price
-          carData.discountprice = Number(catalogEntry[0].vendorPrice);
+
+          carData.discountprice = Number(catalogEntry[0].platformPrice);
 
           console.log(`🚗 [CREATE_CAR] Inferred price: ${carData.price}, discount price: ${carData.discountprice}`);
         } else {
@@ -945,7 +993,6 @@ export const updateCar = asyncHandler(
         "color",
         "price",
         "discountprice",
-        "inmaintainance",
         "isavailable",
         "rcnumber",
         "rcimg",
@@ -1226,8 +1273,6 @@ export const filterCars = asyncHandler(async (req: Request, res: Response) => {
         price: carModel.price,
         discountprice: carModel.discountprice,
         color: carModel.color,
-        inmaintainance: carModel.inmaintainance,
-        isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
         rcimg: carModel.rcimg,
         pollutionimg: carModel.pollutionimg,

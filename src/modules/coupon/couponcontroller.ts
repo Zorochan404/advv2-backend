@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { db } from "../../drizzle/db";
 import { couponTable } from "./couponmodel";
 import { asyncHandler } from "../utils/asyncHandler";
-import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
+import { eq, and, lt, gt, sql, desc, gte, lte } from "drizzle-orm";
 import { ApiError } from "../utils/apiError";
 import {
   sendSuccess,
@@ -130,9 +130,9 @@ export const getActiveCoupons = asyncHandler(
         and(
           eq(couponTable.isActive, true),
           eq(couponTable.status, "active"),
-          lt(couponTable.startDate, currentDate),
-          gt(couponTable.endDate, currentDate),
-          sql`(${couponTable.usageLimit} IS NULL OR ${couponTable.usageCount} < ${couponTable.usageLimit})`
+          lte(couponTable.startDate, currentDate),
+          gte(couponTable.endDate, currentDate),
+          sql`(${couponTable.usageLimit} = 0 OR ${couponTable.usageCount} < ${couponTable.usageLimit})`
         ),
       orderBy: (couponTable, { desc }) => [desc(couponTable.createdAt)],
     });
@@ -316,7 +316,7 @@ export const validateCoupon = asyncHandler(
     let discountAmount = 0;
     if (coupon.discountType === "percentage") {
       discountAmount = (parseFloat(bookingAmount) * parseFloat(coupon.discountAmount.toString())) / 100;
-      
+
       // Apply max discount if applicable
       if (coupon.maxDiscountAmount && discountAmount > parseFloat(coupon.maxDiscountAmount.toString())) {
         discountAmount = parseFloat(coupon.maxDiscountAmount.toString());

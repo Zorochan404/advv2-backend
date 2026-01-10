@@ -495,7 +495,6 @@ export const advertisementCreateSchema = z.object({
     .min(1, "Description is required")
     .max(500, "Description too long"),
   imageUrl: z.string().url("Invalid image URL"),
-  linkUrl: z.string().url("Invalid link URL").optional(),
   adType: z.enum(["banner", "popup", "carousel"]).default("banner"),
   startDate: z.string().datetime("Invalid start date"),
   endDate: z.string().datetime("Invalid end date"),

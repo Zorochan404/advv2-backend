@@ -12,6 +12,8 @@ import {
   createCar,
   updateCar,
   deleteCar,
+  getavailablecars,
+  getCarByParkingIdbyuser,
 } from "./carcontroller";
 import { seedInsuranceAmounts } from "./seedInsurance";
 import { verifyJWT } from "../middleware/auth";
@@ -50,6 +52,10 @@ router.post(
   getNearestAvailableCars
 );
 router.get(
+  "/availablecars",
+  getavailablecars
+);
+router.get(
   "/nearestpopularcars",
   validateRequest(carLocationSchema),
   getNearestPopularCars
@@ -59,6 +65,7 @@ router.post(
   validateRequest(carLocationSchema),
   getNearestPopularCars
 );
+
 router.get("/search", validateRequest(carSearchSchema), searchbynameornumber);
 router.post("/search", validateRequest(carSearchSchema), searchbynameornumber);
 router.get("/filter", validateRequest(carFilterSchema), filterCars);
@@ -90,6 +97,12 @@ router.get(
   "/carbyparking/:id",
   validateRequest({ ...idParamSchema, ...paginationQuerySchema }),
   getCarByParkingId
+);
+
+router.get(
+  "/carbyparkingbyuser/:id",
+  validateRequest({ ...idParamSchema, ...paginationQuerySchema }),
+  getCarByParkingIdbyuser
 );
 router.put(
   "/:id",

@@ -29,13 +29,13 @@ interface CarData {
   rcimg: string;
   pollutionimg: string;
   insuranceimg: string;
-  inmaintainance: boolean;
-  isavailable: boolean;
   images: string[] | null;
   mainimg: string;
   vendorid: number;
   parkingid: number | null;
   catalogId: number | null;
+  status: string;
+
   // Vendor object with complete details
   vendor?: {
     id: number;
@@ -136,13 +136,13 @@ export const getAllCars = asyncHandler(async (req: Request, res: Response) => {
     // Apply status filter
     if (status !== 'all') {
       if (status === 'available') {
-        whereConditions.push(and(eq(carModel.isavailable, true), eq(carModel.inmaintainance, false)));
+        whereConditions.push(and(eq(carModel.status, 'available')));
       } else if (status === 'rented') {
-        whereConditions.push(and(eq(carModel.isavailable, false), eq(carModel.inmaintainance, false)));
+        whereConditions.push(and(eq(carModel.status, 'booked')));
       } else if (status === 'maintenance') {
-        whereConditions.push(eq(carModel.inmaintainance, true));
+        whereConditions.push(eq(carModel.status, 'maintenance'));
       } else if (status === 'out_of_service') {
-        whereConditions.push(and(eq(carModel.isavailable, false), eq(carModel.inmaintainance, false)));
+        whereConditions.push(and(eq(carModel.status, 'out_of_service')));
       }
     }
 
@@ -246,8 +246,6 @@ export const getAllCars = asyncHandler(async (req: Request, res: Response) => {
         insuranceAmount: carModel.insuranceAmount,
         fineperhour: carModel.fineperhour,
         extensionperhour: carModel.extensionperhour,
-        inmaintainance: carModel.inmaintainance,
-        isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
         rcimg: carModel.rcimg,
         pollutionimg: carModel.pollutionimg,
@@ -259,6 +257,7 @@ export const getAllCars = asyncHandler(async (req: Request, res: Response) => {
         status: carModel.status,
         createdAt: carModel.createdAt,
         updatedAt: carModel.updatedAt,
+
         // Catalog fields
         maker: carCatalogTable.carMaker,
         year: carCatalogTable.carModelYear,
@@ -310,13 +309,12 @@ export const getAllCars = asyncHandler(async (req: Request, res: Response) => {
       rcimg: car.rcimg || '',
       pollutionimg: car.pollutionimg || '',
       insuranceimg: car.insuranceimg || '',
-      inmaintainance: car.inmaintainance,
-      isavailable: car.isavailable,
       images: car.images || null,
       mainimg: car.images?.[0] || '',
       vendorid: car.vendorid,
       parkingid: car.parkingid,
       catalogId: car.catalogId,
+      status: car.status,
       // Vendor object with complete details
       vendor: car.vendorId ? {
         id: car.vendorId,
@@ -356,9 +354,9 @@ export const getCarStats = asyncHandler(async (req: Request, res: Response) => {
   try {
     const [totalResult, availableResult, rentedResult, maintenanceResult] = await Promise.all([
       db.select({ count: count() }).from(carModel),
-      db.select({ count: count() }).from(carModel).where(and(eq(carModel.isavailable, true), eq(carModel.inmaintainance, false))),
-      db.select({ count: count() }).from(carModel).where(and(eq(carModel.isavailable, false), eq(carModel.inmaintainance, false))),
-      db.select({ count: count() }).from(carModel).where(eq(carModel.inmaintainance, true))
+      db.select({ count: count() }).from(carModel).where(and(eq(carModel.status, 'available'))),
+      db.select({ count: count() }).from(carModel).where(and(eq(carModel.status, 'booked'))),
+      db.select({ count: count() }).from(carModel).where(eq(carModel.status, 'maintenance'))
     ]);
 
     const stats: CarStats = {
@@ -397,8 +395,6 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
         insuranceAmount: carModel.insuranceAmount,
         fineperhour: carModel.fineperhour,
         extensionperhour: carModel.extensionperhour,
-        inmaintainance: carModel.inmaintainance,
-        isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
         rcimg: carModel.rcimg,
         pollutionimg: carModel.pollutionimg,
@@ -465,13 +461,12 @@ export const getCarById = asyncHandler(async (req: Request, res: Response) => {
       rcimg: carData.rcimg || '',
       pollutionimg: carData.pollutionimg || '',
       insuranceimg: carData.insuranceimg || '',
-      inmaintainance: carData.inmaintainance,
-      isavailable: carData.isavailable,
       images: carData.images || null,
       mainimg: carData.images?.[0] || '',
       vendorid: carData.vendorid,
       parkingid: carData.parkingid,
       catalogId: carData.catalogId,
+      status: carData.status,
       // Vendor object with complete details
       vendor: carData.vendorId ? {
         id: carData.vendorId,
@@ -546,7 +541,8 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
     if (updateData.isavailable !== undefined) carUpdateData.isavailable = updateData.isavailable;
     if (updateData.inmaintainance !== undefined) carUpdateData.inmaintainance = updateData.inmaintainance;
     if (updateData.status !== undefined) carUpdateData.status = updateData.status;
-
+    if (updateData.fineperhour !== undefined) carUpdateData.fineperhour = updateData.fineperhour;
+    if (updateData.extensionperhour !== undefined) carUpdateData.extensionperhour = updateData.extensionperhour;
     // Update car number if provided
     if (updateData.carnumber !== undefined) carUpdateData.number = updateData.carnumber;
 
@@ -592,8 +588,6 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
         insuranceAmount: carModel.insuranceAmount,
         fineperhour: carModel.fineperhour,
         extensionperhour: carModel.extensionperhour,
-        inmaintainance: carModel.inmaintainance,
-        isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
         rcimg: carModel.rcimg,
         pollutionimg: carModel.pollutionimg,
@@ -658,8 +652,6 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
       rcimg: carData.rcimg || '',
       pollutionimg: carData.pollutionimg || '',
       insuranceimg: carData.insuranceimg || '',
-      inmaintainance: carData.inmaintainance,
-      isavailable: carData.isavailable,
       fineperhour: carData.fineperhour || 0,
       extensionperhour: carData.extensionperhour || 0,
       images: carData.images || null,
@@ -667,6 +659,7 @@ export const updateCar = asyncHandler(async (req: Request, res: Response) => {
       vendorid: carData.vendorid,
       parkingid: carData.parkingid,
       catalogId: carData.catalogId,
+      status: carData.status,
       // Vendor object with complete details
       vendor: carData.vendorId ? {
         id: carData.vendorId,
@@ -810,8 +803,6 @@ export const getCarsByBookingDateRange = asyncHandler(async (req: Request, res: 
         insuranceAmount: carModel.insuranceAmount,
         fineperhour: carModel.fineperhour,
         extensionperhour: carModel.extensionperhour,
-        inmaintainance: carModel.inmaintainance,
-        isavailable: carModel.isavailable,
         rcnumber: carModel.rcnumber,
         rcimg: carModel.rcimg,
         pollutionimg: carModel.pollutionimg,
@@ -862,13 +853,12 @@ export const getCarsByBookingDateRange = asyncHandler(async (req: Request, res: 
       rcimg: car.rcimg || '',
       pollutionimg: car.pollutionimg || '',
       insuranceimg: car.insuranceimg || '',
-      inmaintainance: car.inmaintainance,
-      isavailable: car.isavailable,
       images: car.images || null,
       mainimg: car.images?.[0] || '',
       vendorid: car.vendorid,
       parkingid: car.parkingid,
       catalogId: car.catalogId,
+      status: car.status,
       isapproved: true,
       ispopular: false,
       createdAt: car.createdAt.toISOString(),

@@ -42,8 +42,7 @@ export const getParkingStats = asyncHandler(async (req: Request, res: Response) 
       .select({ count: count() })
       .from(carModel)
       .where(and(
-        eq(carModel.isavailable, true),
-        eq(carModel.inmaintainance, false)
+        eq(carModel.status, 'available'),
       ));
 
     const availableCars = availableCarsResult[0]?.count || 0;
@@ -52,7 +51,7 @@ export const getParkingStats = asyncHandler(async (req: Request, res: Response) 
     const bookedCarsResult = await db
       .select({ count: count() })
       .from(carModel)
-      .where(eq(carModel.isavailable, false));
+      .where(eq(carModel.status, "available"));
 
     const bookedCars = bookedCarsResult[0]?.count || 0;
 
@@ -60,7 +59,7 @@ export const getParkingStats = asyncHandler(async (req: Request, res: Response) 
     const maintenanceCarsResult = await db
       .select({ count: count() })
       .from(carModel)
-      .where(eq(carModel.inmaintainance, true));
+      .where(eq(carModel.status, "maintenance"));
 
     const maintenanceCars = maintenanceCarsResult[0]?.count || 0;
 
@@ -220,8 +219,7 @@ export const searchParkingSpots = asyncHandler(async (req: Request, res: Respons
           .from(carModel)
           .where(and(
             eq(carModel.parkingid, spot.id),
-            eq(carModel.isavailable, true),
-            eq(carModel.inmaintainance, false)
+            eq(carModel.status, 'available'),
           ));
 
         const totalCars = totalCarsResult[0]?.count || 0;
@@ -334,8 +332,7 @@ export const getParkingAnalytics = asyncHandler(async (req: Request, res: Respon
         .from(carModel)
         .where(and(
           eq(carModel.parkingid, Number(spotId)),
-          eq(carModel.isavailable, true),
-          eq(carModel.inmaintainance, false)
+          eq(carModel.status, 'available'),
         ));
 
       const totalCars = totalCarsResult[0]?.count || 0;
@@ -426,8 +423,7 @@ export const getParkingManagersPerformance = asyncHandler(async (req: Request, r
           .from(carModel)
           .where(and(
             eq(carModel.parkingid, manager.parkingId),
-            eq(carModel.isavailable, true),
-            eq(carModel.inmaintainance, false)
+            eq(carModel.status, 'available'),
           ));
 
         const carsManaged = carsManagedResult[0]?.count || 0;

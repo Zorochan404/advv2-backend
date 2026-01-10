@@ -14,6 +14,8 @@ import {
   sendPaginated,
 } from "../utils/responseHandler";
 import { withDatabaseErrorHandling } from "../utils/dbErrorHandler";
+import { carCatalog } from "../../drizzle/migrations/schema";
+import { carCatalogTable } from "../car/carmodel";
 
 export const getParking = asyncHandler(async (req: Request, res: Response) => {
   const parking = await withDatabaseErrorHandling(async () => {
@@ -252,9 +254,10 @@ export const getParkingById = asyncHandler(
           rcimg: carModel.rcimg,
           pollutionimg: carModel.pollutionimg,
           insuranceimg: carModel.insuranceimg,
-          inmaintainance: carModel.inmaintainance,
-          isavailable: carModel.isavailable,
           images: carModel.images,
+          transmission: carCatalogTable.transmission,
+          fuel: carCatalogTable.fuelType,
+          seats: carCatalogTable.seats,
           vendorid: carModel.vendorid,
           parkingid: carModel.parkingid,
           status: carModel.status,
@@ -262,14 +265,17 @@ export const getParkingById = asyncHandler(
           updatedAt: carModel.updatedAt,
         })
         .from(carModel)
+        .leftJoin(carCatalogTable, eq(carModel.catalogId, carCatalogTable.id))
         .where(eq(carModel.parkingid, parseInt(id)));
+
+      
 
       // Combine parking details with cars
       return {
         parking: parking[0],
         cars: cars,
         totalCars: cars.length,
-        availableCars: cars.filter((car) => car.isavailable).length,
+        availableCars: cars.filter((car) => car.status === "available").length,
       };
     }, "getParkingById");
 
@@ -433,8 +439,6 @@ export const getParkingByIDadmin = asyncHandler(
           rcimg: carModel.rcimg,
           pollutionimg: carModel.pollutionimg,
           insuranceimg: carModel.insuranceimg,
-          inmaintainance: carModel.inmaintainance,
-          isavailable: carModel.isavailable,
           images: carModel.images,
           vendorid: carModel.vendorid,
           parkingid: carModel.parkingid,
@@ -451,9 +455,9 @@ export const getParkingByIDadmin = asyncHandler(
         parkingIncharge: parkingIncharge,
         cars: cars,
         totalCars: cars.length,
-        availableCars: cars.filter((car) => car.isavailable).length,
-        approvedCars: cars.filter((car) => car.status === "available").length,
-        inMaintenanceCars: cars.filter((car) => car.inmaintainance).length,
+        availableCars: cars.filter((car) => car.status === "available").length,
+        // approvedCars: cars.filter((car) => car.status === "approved").length,
+        inMaintenanceCars: cars.filter((car) => car.status === "maintenance").length,
       };
     }, "getParkingByIDadmin");
 

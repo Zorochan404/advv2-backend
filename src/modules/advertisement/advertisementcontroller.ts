@@ -410,9 +410,7 @@ export const getActiveAdvertisements = asyncHandler(
         .from(advertisementTable)
         .where(
           and(
-            eq(advertisementTable.status, "active"),
             eq(advertisementTable.isActive, true),
-            eq(advertisementTable.adType, adType as any),
             eq(advertisementTable.location, location as string),
             lte(advertisementTable.startDate, thirtyDaysFromNow), // Allow ads starting within next 30 days
             gte(advertisementTable.endDate, currentDate) // Must not have ended yet
