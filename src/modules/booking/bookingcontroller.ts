@@ -64,6 +64,8 @@ export const createBooking = asyncHandler<AuthenticatedRequest>(
       carId,
       startDate,
       endDate,
+      startTime,
+      endTime,
       deliveryCharges = 0,
       couponCode,
     } = req.body;
@@ -75,9 +77,15 @@ export const createBooking = asyncHandler<AuthenticatedRequest>(
       );
     }
 
+    // Helper to combine date and time
+    const combineDateAndTime = (dateStr: string, timeStr?: string) => {
+      const time = timeStr || "00:00:00";
+      return new Date(`${dateStr}T${time}`);
+    };
+
     // Validate dates
-    const startDateObj = new Date(startDate);
-    const endDateObj = new Date(endDate);
+    const startDateObj = combineDateAndTime(startDate, startTime);
+    const endDateObj = combineDateAndTime(endDate, endTime);
 
     if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
       throw ApiError.badRequest("Invalid date format");
@@ -120,12 +128,32 @@ export const createBooking = asyncHandler<AuthenticatedRequest>(
       throw ApiError.conflict("Car is already booked for the selected dates");
     }
 
-    // Calculate base pricing
-    const days = Math.ceil(
-      (endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    const basePrice =
-      (carprice[0]?.discountprice || carprice[0]?.price || 0) * days;
+    // Calculate base pricing with half-day logic
+    const diffTime = Math.abs(endDateObj.getTime() - startDateObj.getTime());
+    const totalHours = diffTime / (1000 * 60 * 60);
+
+    let fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+
+    // Minimum 1 day if duration is 0
+    if (fullDays === 0 && remainingHours === 0) {
+      fullDays = 1;
+    }
+
+    const pricePerDay = Number(carprice[0]?.discountprice) || Number(carprice[0]?.price) || 0;
+    const halfDayPrice = Number((carprice[0] as any).halfdayprice) || 0;
+
+    let basePrice = fullDays * pricePerDay;
+
+    if (remainingHours > 0) {
+      if (remainingHours <= 12) {
+        // Half day
+        basePrice += halfDayPrice > 0 ? halfDayPrice : pricePerDay / 2;
+      } else {
+        // Full day
+        basePrice += pricePerDay;
+      }
+    }
 
     // Get insurance amount from car details
     const insuranceAmount = carprice[0]?.insuranceAmount || 0;
@@ -243,6 +271,26 @@ export const createBooking = asyncHandler<AuthenticatedRequest>(
 
     const parkingId = carDetails[0].parkingId;
 
+    // Create advance payment record
+    const paymentTransactionId = `pay_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const [payment] = await db
+      .insert(paymentsTable)
+      .values({
+        paymentId: paymentTransactionId,
+        type: "advance",
+        status: "completed",
+        method: "card",
+        amount: advanceAmount,
+        netAmount: advanceAmount,
+        userId: Number(req.user.id),
+        // bookingId will be updated after booking creation
+      })
+      .returning();
+
+    // Generate OTP
+    const otpCode = generateOTP();
+    // const otpExpiresAt = getOTPExpirationForPickup(startDateObj);
+
     // Insert booking
     const newBooking = await db
       .insert(bookingsTable)
@@ -257,9 +305,12 @@ export const createBooking = asyncHandler<AuthenticatedRequest>(
         advanceAmount,
         remainingAmount,
         totalPrice,
-        status: "pending",
+        status: "advance_paid",
         confirmationStatus: "pending",
         deliveryCharges,
+        advancePaymentId: payment.id,
+        otpCode,
+        // otpExpiresAt,
         // Add coupon and insurance fields
         couponId: appliedCouponId,
         discountAmount,
@@ -268,6 +319,12 @@ export const createBooking = asyncHandler<AuthenticatedRequest>(
         updatedAt: new Date(),
       })
       .returning();
+
+    // Link payment to booking
+    await db
+      .update(paymentsTable)
+      .set({ bookingId: newBooking[0].id })
+      .where(eq(paymentsTable.id, payment.id));
 
     return sendCreated(res, newBooking[0], "Booking created successfully");
   }
@@ -468,7 +525,7 @@ export const deletebooking = asyncHandler(
       throw ApiError.badRequest("Invalid booking ID");
     }
 
-     // Get booking details before deletion to update car status
+    // Get booking details before deletion to update car status
     const bookingToDelete = await db.query.bookingsTable.findFirst({
       where: (bookingsTable, { eq }) => eq(bookingsTable.id, parseInt(id)),
     });
@@ -491,7 +548,7 @@ export const deletebooking = asyncHandler(
     if (bookingToDelete.carId) {
       await db
         .update(carModel)
-        .set({ 
+        .set({
           status: "available",
         })
         .where(eq(carModel.id, bookingToDelete.carId));
@@ -802,9 +859,9 @@ export const getPICDashboard = asyncHandler<AuthenticatedRequest>(
       where: (bookingsTable, { inArray }) =>
         cars.length > 0
           ? inArray(
-              bookingsTable.carId,
-              cars.map((car) => car.id)
-            )
+            bookingsTable.carId,
+            cars.map((car) => car.id)
+          )
           : undefined,
       with: {
         car: true,
@@ -1135,8 +1192,7 @@ export const rescheduleBooking = asyncHandler<AuthenticatedRequest>(
       (bookingData.maxRescheduleCount || 3)
     ) {
       throw ApiError.badRequest(
-        `Maximum reschedule limit (${
-          bookingData.maxRescheduleCount || 3
+        `Maximum reschedule limit (${bookingData.maxRescheduleCount || 3
         }) reached`
       );
     }
@@ -1583,6 +1639,8 @@ export const confirmFinalPayment = asyncHandler<AuthenticatedRequest>(
       .set({
         finalPaymentId: finalPayment[0].id,
         status: "confirmed",
+        advanceAmount: booking.advanceAmount + booking.remainingAmount,
+        remainingAmount: 0
       })
       .where(eq(bookingsTable.id, bookingId))
       .returning();
@@ -2013,7 +2071,7 @@ export const getUserBookingsWithStatus = asyncHandler<AuthenticatedRequest>(
 
 export const confirmCarPickup = asyncHandler<AuthenticatedRequest>(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { bookingId } = req.body;
+    const { bookingId, otpCode } = req.body;
     const picId = req.user.id;
 
     if (!bookingId) {
@@ -2021,7 +2079,7 @@ export const confirmCarPickup = asyncHandler<AuthenticatedRequest>(
     }
 
     const booking = await db.query.bookingsTable.findFirst({
-      where: (bookingsTable, { eq }) => eq(bookingsTable.id, bookingId),
+      where: (bookingsTable, { eq }) => eq(bookingsTable.id, bookingId) && eq(bookingsTable.otpCode, otpCode),
       with: {
         car: {
           with: {
@@ -2056,14 +2114,6 @@ export const confirmCarPickup = asyncHandler<AuthenticatedRequest>(
       throw ApiError.badRequest("Final payment must be completed");
     }
 
-    if (!booking.otpVerified) {
-      throw ApiError.badRequest("OTP must be verified before car pickup");
-    }
-
-    if (booking.confirmationStatus !== "approved") {
-      throw ApiError.badRequest("Confirmation must be approved by PIC");
-    }
-
     if (booking.actualPickupDate) {
       throw ApiError.conflict("Car has already been picked up");
     }
@@ -2072,7 +2122,8 @@ export const confirmCarPickup = asyncHandler<AuthenticatedRequest>(
       .update(bookingsTable)
       .set({
         actualPickupDate: new Date(),
-        status: "active", // Change status to active when car is picked up
+        status: "active",
+        otpVerified: true,
       })
       .where(eq(bookingsTable.id, bookingId))
       .returning();
@@ -2080,7 +2131,7 @@ export const confirmCarPickup = asyncHandler<AuthenticatedRequest>(
     // Keep car status as "booked" and unavailable during active rental
     await db
       .update(carModel)
-      .set({ 
+      .set({
         status: "booked",
       })
       .where(eq(carModel.id, booking.carId));
@@ -2243,7 +2294,7 @@ export const confirmCarReturn = asyncHandler<AuthenticatedRequest>(
     // Make car available again after return
     await db
       .update(carModel)
-      .set({ 
+      .set({
         status: "available",
       })
       .where(eq(carModel.id, booking.carId));
@@ -2330,10 +2381,10 @@ export const getEarningsOverview = asyncHandler<AuthenticatedRequest>(
           totalAmount:
             Math.round(
               (booking.advanceAmount || 0) +
-                (booking.remainingAmount || 0) +
-                (booking.extensionPrice || 0) +
-                // Late fees removed
-                (booking.deliveryCharges || 0) * 100
+              (booking.remainingAmount || 0) +
+              (booking.extensionPrice || 0) +
+              // Late fees removed
+              (booking.deliveryCharges || 0) * 100
             ) / 100,
           advanceAmount: booking.advanceAmount || 0,
           finalAmount: booking.remainingAmount || 0,
@@ -2423,16 +2474,14 @@ export const checkBookingOverdue = asyncHandler<AuthenticatedRequest>(
 // Apply topup to extend booking
 export const applyTopupToBooking = asyncHandler<AuthenticatedRequest>(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { bookingId, topupId, paymentReferenceId } = req.body;
+    const { bookingId, paymentReferenceId } = req.body;
 
-    if (!bookingId || !topupId || !paymentReferenceId) {
-      throw ApiError.badRequest(
-        "Booking ID, topup ID, and payment reference ID are required"
-      );
+    if (!bookingId || !paymentReferenceId) {
+      throw ApiError.badRequest("Booking ID and payment reference ID are required");
     }
 
     const result = await db.query.bookingsTable.findFirst({
-      where: (bookingsTable, { eq }) => eq(bookingsTable.id, bookingId),
+      where: (bookingsTable, { eq }) => eq(bookingsTable.id, parseInt(bookingId)),
       with: {
         car: true,
         user: true,
@@ -2460,38 +2509,52 @@ export const applyTopupToBooking = asyncHandler<AuthenticatedRequest>(
       );
     }
 
-    // Get topup details
-    const topup = await db
-      .select()
-      .from(topupTable)
-      .where(eq(topupTable.id, topupId))
-      .limit(1);
-
-    if (!topup || topup.length === 0) {
-      throw ApiError.notFound("Topup not found");
-    }
-
-    if (!topup[0].isActive) {
-      throw ApiError.badRequest("This topup is not active");
-    }
-
     // Calculate new end date
+    const extensionTime = Number(req.body.extensionTime);
+    if (!extensionTime || isNaN(extensionTime) || extensionTime <= 0) {
+      throw ApiError.badRequest("Valid extension time in hours is required");
+    }
+
     const currentEndDate = booking.extensionTill || new Date(booking.endDate);
-    const extensionTime = topup[0].duration; // in hours
     const newEndDate = new Date(
       currentEndDate.getTime() + extensionTime * 60 * 60 * 1000
     );
+
+    // Calculate price
+    const carData = await db.query.carModel.findFirst({
+      where: eq(carModel.id, booking.carId),
+    });
+
+    if (!carData) {
+      throw ApiError.notFound("Car details not found");
+    }
+    const pricePerDay = Number(carData.discountprice) || Number(carData.price) || 0;
+    const halfDayPrice = Number((carData as any).halfdayprice) || 0; // Type casting in case of inference issue
+
+    let fullDays = Math.floor(extensionTime / 24);
+    const remainingHours = extensionTime % 24;
+
+    let extensionPrice = fullDays * pricePerDay;
+
+    if (remainingHours > 0) {
+      if (remainingHours <= 12) {
+        // Half day logic
+        extensionPrice += halfDayPrice > 0 ? halfDayPrice : pricePerDay / 2;
+      } else {
+        // Full day logic for > 12 hours
+        extensionPrice += pricePerDay;
+      }
+    }
 
     // Create booking-topup relationship
     const bookingTopup = await db
       .insert(bookingTopupTable)
       .values({
         bookingId: bookingId,
-        topupId: topupId,
         appliedAt: new Date(),
         originalEndDate: currentEndDate,
         newEndDate: newEndDate,
-        amount: topup[0].price,
+        amount: extensionPrice,
         paymentStatus: "paid",
         paymentReferenceId: paymentReferenceId,
       })
@@ -2502,7 +2565,7 @@ export const applyTopupToBooking = asyncHandler<AuthenticatedRequest>(
       .update(bookingsTable)
       .set({
         endDate: newEndDate,
-        extensionPrice: (booking.extensionPrice || 0) + topup[0].price,
+        extensionPrice: (booking.extensionPrice || 0) + extensionPrice,
         extensionTill: newEndDate,
         extensionTime: (booking.extensionTime || 0) + extensionTime,
       })
@@ -2514,7 +2577,6 @@ export const applyTopupToBooking = asyncHandler<AuthenticatedRequest>(
       {
         bookingTopup: bookingTopup[0],
         updatedBooking: updatedBooking[0],
-        topup: topup[0],
         newEndDate: newEndDate,
         extensionTime: extensionTime,
       },
@@ -2565,13 +2627,13 @@ export const getPickupCars = asyncHandler(
         // Filter by pickup date range - handle null pickupDate gracefully
         const pickupDateCondition = bookingsTable.pickupDate
           ? and(
-              gte(bookingsTable.pickupDate, start),
-              lte(bookingsTable.pickupDate, end)
-            )
+            gte(bookingsTable.pickupDate, start),
+            lte(bookingsTable.pickupDate, end)
+          )
           : and(
-              gte(bookingsTable.startDate, start),
-              lte(bookingsTable.startDate, end)
-            );
+            gte(bookingsTable.startDate, start),
+            lte(bookingsTable.startDate, end)
+          );
 
         if (pickupDateCondition) {
           conditions.push(pickupDateCondition);
@@ -2650,30 +2712,30 @@ export const getPickupCars = asyncHandler(
           // Get parking details
           const pickupParking = booking.pickupParkingId
             ? await db
-                .select({
-                  id: parkingTable.id,
-                  name: parkingTable.name,
-                  locality: parkingTable.locality,
-                  city: parkingTable.city,
-                  state: parkingTable.state,
-                })
-                .from(parkingTable)
-                .where(eq(parkingTable.id, booking.pickupParkingId))
-                .limit(1)
+              .select({
+                id: parkingTable.id,
+                name: parkingTable.name,
+                locality: parkingTable.locality,
+                city: parkingTable.city,
+                state: parkingTable.state,
+              })
+              .from(parkingTable)
+              .where(eq(parkingTable.id, booking.pickupParkingId))
+              .limit(1)
             : null;
 
           const dropoffParking = booking.dropoffParkingId
             ? await db
-                .select({
-                  id: parkingTable.id,
-                  name: parkingTable.name,
-                  locality: parkingTable.locality,
-                  city: parkingTable.city,
-                  state: parkingTable.state,
-                })
-                .from(parkingTable)
-                .where(eq(parkingTable.id, booking.dropoffParkingId))
-                .limit(1)
+              .select({
+                id: parkingTable.id,
+                name: parkingTable.name,
+                locality: parkingTable.locality,
+                city: parkingTable.city,
+                state: parkingTable.state,
+              })
+              .from(parkingTable)
+              .where(eq(parkingTable.id, booking.dropoffParkingId))
+              .limit(1)
             : null;
 
           return {
@@ -2827,30 +2889,30 @@ export const getDropoffCars = asyncHandler(
           // Get parking details
           const pickupParking = booking.pickupParkingId
             ? await db
-                .select({
-                  id: parkingTable.id,
-                  name: parkingTable.name,
-                  locality: parkingTable.locality,
-                  city: parkingTable.city,
-                  state: parkingTable.state,
-                })
-                .from(parkingTable)
-                .where(eq(parkingTable.id, booking.pickupParkingId))
-                .limit(1)
+              .select({
+                id: parkingTable.id,
+                name: parkingTable.name,
+                locality: parkingTable.locality,
+                city: parkingTable.city,
+                state: parkingTable.state,
+              })
+              .from(parkingTable)
+              .where(eq(parkingTable.id, booking.pickupParkingId))
+              .limit(1)
             : null;
 
           const dropoffParking = booking.dropoffParkingId
             ? await db
-                .select({
-                  id: parkingTable.id,
-                  name: parkingTable.name,
-                  locality: parkingTable.locality,
-                  city: parkingTable.city,
-                  state: parkingTable.state,
-                })
-                .from(parkingTable)
-                .where(eq(parkingTable.id, booking.dropoffParkingId))
-                .limit(1)
+              .select({
+                id: parkingTable.id,
+                name: parkingTable.name,
+                locality: parkingTable.locality,
+                city: parkingTable.city,
+                state: parkingTable.state,
+              })
+              .from(parkingTable)
+              .where(eq(parkingTable.id, booking.dropoffParkingId))
+              .limit(1)
             : null;
 
           return {
@@ -2914,9 +2976,9 @@ export const getPICBookings = asyncHandler<AuthenticatedRequest>(
       where: (bookingsTable, { inArray }) =>
         cars.length > 0
           ? inArray(
-              bookingsTable.carId,
-              cars.map((car) => car.id)
-            )
+            bookingsTable.carId,
+            cars.map((car) => car.id)
+          )
           : undefined,
       with: {
         car: {
@@ -3081,18 +3143,18 @@ export const getUserBookingsFormatted = asyncHandler<AuthenticatedRequest>(
       // Format times (using pickup and dropoff dates if available)
       const pickupTime = booking.pickupDate
         ? new Date(booking.pickupDate).toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          })
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })
         : "12:00 PM";
 
       const dropoffTime = booking.endDate
         ? new Date(booking.endDate).toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          })
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })
         : "12:00 PM";
 
       // Get location names
@@ -3185,7 +3247,6 @@ export const getDetailedBookingById = asyncHandler<AuthenticatedRequest>(
         },
         pickupParking: true,
         dropoffParking: true,
-        coupon: true,
       },
     });
 
@@ -3193,85 +3254,23 @@ export const getDetailedBookingById = asyncHandler<AuthenticatedRequest>(
       throw ApiError.notFound("Booking not found or access denied");
     }
 
-    // Calculate number of days
-    const startDate = new Date(result.startDate);
-    const endDate = new Date(result.endDate);
-    const numberOfDays = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    // Get car image from catalog or use a default
-    const carImage = "https://example.com/car-images/default.jpg";
-
-    // Get car name from catalog or use car name
-    const carName = "Unknown Car";
-
-    // Determine status
-    let status = "inactive";
-    if (
-      result.finalPaymentId !== null &&
-      (result.status === "active" || result.status === "completed")
-    ) {
-      status = "active";
-    }
-
-    // Format dates
-    const pickupDate = result.startDate
-      ? new Date(result.startDate).toISOString().split("T")[0]
-      : "";
-    const dropoffDate = result.endDate
-      ? new Date(result.endDate).toISOString().split("T")[0]
-      : "";
-    const bookedOn = result.createdAt
-      ? new Date(result.createdAt).toISOString().split("T")[0]
-      : "";
-
-    // Get location address
-    const locationAddress = "Unknown Parking";
-
-    // Create billing breakdown
-    const billingBreakdown = {
-      basePrice: Number(result.basePrice) || 0,
-      insuranceAmount: Number(result.insuranceAmount) || 0,
-      deliveryCharges: Number(result.deliveryCharges) || 0,
-      discountAmount: Number(result.discountAmount) || 0,
-      totalBeforeDiscount:
-        Number(result.basePrice || 0) +
-        Number(result.insuranceAmount || 0) +
-        Number(result.deliveryCharges || 0),
-      totalPrice: Number(result.totalPrice) || 0,
-      advanceAmount: Number(result.advanceAmount) || 0,
-      remainingAmount: Number(result.remainingAmount) || 0,
-    };
-
+    // Clean up tools data and add status summaries (matching getUserBookingsWithStatus logic)
     const detailedBooking = {
-      name: carName,
-      image: carImage,
-      status: status,
-      isOTP: result.otpVerified || false,
-      isCarChecked:
-        result.carConditionImages && result.carConditionImages.length > 0,
-      isPaid: result.finalPaymentId !== null,
-      totalRating: 4.5, // This would come from reviews table in a real implementation
-      totalPeopleRated: 128, // This would come from reviews table in a real implementation
-      parkingName: "Unknown Parking",
-      perDayCost:
-        Number(0) ||
-        Number(0) ||
-        0,
-      carType: "Sedan",
-      fuelType: "Petrol",
-      noOfSeats: 5,
-      bookingDetails: {
-        pickupDate: pickupDate,
-        dropoffDate: dropoffDate,
-        numberOfDays: numberOfDays,
-        locationAddress: locationAddress,
-        couponCode: null,
-        isInsurance: Number(result.insuranceAmount) > 0,
-        isHomeDelivery: result.deliveryType === "delivery",
-        bookedOn: bookedOn,
-        billingBreakdown: billingBreakdown,
+      ...result,
+      tools: cleanToolsData(result.tools),
+      statusSummary: calculateBookingStatus(result),
+      billingBreakdown: {
+        basePrice: result.basePrice,
+        insuranceAmount: result.insuranceAmount || 0,
+        deliveryCharges: result.deliveryCharges || 0,
+        discountAmount: result.discountAmount || 0,
+        totalBeforeDiscount:
+          Number(result.basePrice) +
+          Number(result.insuranceAmount || 0) +
+          Number(result.deliveryCharges || 0),
+        totalPrice: result.totalPrice,
+        advanceAmount: result.advanceAmount,
+        remainingAmount: result.remainingAmount,
       },
     };
 
@@ -3357,7 +3356,7 @@ export const getAllBookings = asyncHandler<AuthenticatedRequest>(
           deliveryCharges: bookingsTable.deliveryCharges,
           createdAt: bookingsTable.createdAt,
           updatedAt: bookingsTable.updatedAt,
-          
+
           // Car fields
           car: {
             id: carModel.id,
@@ -3378,7 +3377,7 @@ export const getAllBookings = asyncHandler<AuthenticatedRequest>(
             createdAt: carModel.createdAt,
             updatedAt: carModel.updatedAt,
           },
-          
+
           // User fields
           user: {
             id: UserTable.id,
@@ -3406,7 +3405,7 @@ export const getAllBookings = asyncHandler<AuthenticatedRequest>(
             createdAt: UserTable.createdAt,
             updatedAt: UserTable.updatedAt,
           },
-          
+
           // Pickup parking fields
           pickupParking: {
             id: sql`pickup_parking.id`.as('pickup_parking_id'),
@@ -3424,7 +3423,7 @@ export const getAllBookings = asyncHandler<AuthenticatedRequest>(
             createdAt: sql`pickup_parking.created_at`.as('pickup_parking_createdAt'),
             updatedAt: sql`pickup_parking.updated_at`.as('pickup_parking_updatedAt'),
           },
-          
+
           // Dropoff parking fields
           dropoffParking: {
             id: sql`dropoff_parking.id`.as('dropoff_parking_id'),
@@ -3522,5 +3521,394 @@ export const getAllBookings = asyncHandler<AuthenticatedRequest>(
       console.error("Error fetching all bookings:", error);
       throw new ApiError(500, "Failed to fetch bookings");
     }
+  }
+);
+
+
+export const getbookingsummary = asyncHandler<AuthenticatedRequest>(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const carid = req.params.id;
+
+    // Validate car ID is numeric
+    if (!/^\d+$/.test(carid)) {
+      throw ApiError.badRequest("Invalid car ID");
+    }
+
+    // Support dates from body (legacy/current pattern) or query
+    const startDate = req.body.startDate || req.query.startDate;
+    const endDate = req.body.endDate || req.query.endDate;
+    const startTime = req.body.startTime || req.query.startTime;
+    const endTime = req.body.endTime || req.query.endTime;
+
+    if (!startDate || !endDate) {
+      throw ApiError.badRequest("Start date and end date are required");
+    }
+
+    // Helper to combine date and time
+    const combineDateAndTime = (dateStr: string, timeStr?: string) => {
+      const time = timeStr || "00:00:00";
+      return new Date(`${dateStr}T${time}`);
+    };
+
+    const start = combineDateAndTime(startDate as string, startTime as string);
+    const end = combineDateAndTime(endDate as string, endTime as string);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw ApiError.badRequest("Invalid date format");
+    }
+
+    if (start >= end) {
+      throw ApiError.badRequest("End date must be after start date");
+    }
+
+    // Fetch car details
+    const car = await db
+      .select()
+      .from(carModel)
+      .where(eq(carModel.id, parseInt(carid)))
+      .limit(1);
+
+    if (!car || car.length === 0) {
+      throw ApiError.notFound("Car not found");
+    }
+
+    const carData = car[0];
+
+    // Calculate duration
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const totalHours = diffTime / (1000 * 60 * 60);
+
+    let fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+
+    // Minimum 1 day if duration is 0
+    if (fullDays === 0 && remainingHours === 0) {
+      fullDays = 1;
+    }
+
+    const pricePerDay = Number(carData.discountprice) || Number(carData.price) || 0;
+    // Helper to get typed car data with halfdayprice which might not be in the inferred type yet if not regenerated
+    const halfDayPrice = Number((carData as any).halfdayprice) || 0;
+
+    let rentalCost = fullDays * pricePerDay;
+
+    if (remainingHours > 0) {
+      if (remainingHours <= 12) {
+        // Half day
+        rentalCost += halfDayPrice > 0 ? halfDayPrice : pricePerDay / 2;
+      } else {
+        // Full day
+        rentalCost += pricePerDay;
+      }
+    }
+    const insurance = Number(carData.insuranceAmount) || 0;
+
+    // Initial discount is 0 for summary
+    const discount = 0;
+
+    const totalBeforeDiscount = rentalCost + insurance;
+    const totalPayment = totalBeforeDiscount - discount;
+
+    const advancePercentage = 0.30;
+    const toBePaidNow = totalPayment * advancePercentage;
+    const remainingAmount = totalPayment - toBePaidNow;
+
+    // Fetch active coupons
+    const now = new Date();
+    const activeCoupons = await db
+      .select()
+      .from(couponTable)
+      .where(
+        and(
+          eq(couponTable.status, "active"),
+          eq(couponTable.isActive, true),
+          lte(couponTable.startDate, now),
+          gte(couponTable.endDate, now)
+        )
+      );
+
+    // Format vouchers with potential discount calculation
+    const vouchers = activeCoupons.map((coupon) => {
+      // Check min booking amount first
+      if (coupon.minBookingAmount && rentalCost < Number(coupon.minBookingAmount)) {
+        return null;
+      }
+
+      let potentialDiscount = 0;
+      if (coupon.discountType === "percentage") {
+        potentialDiscount = (rentalCost * Number(coupon.discountAmount)) / 100;
+        if (coupon.maxDiscountAmount && potentialDiscount > Number(coupon.maxDiscountAmount)) {
+          potentialDiscount = Number(coupon.maxDiscountAmount);
+        }
+      } else {
+        potentialDiscount = Number(coupon.discountAmount);
+      }
+
+      // Cap discount at rental cost
+      if (potentialDiscount > rentalCost) {
+        potentialDiscount = rentalCost;
+      }
+
+      return {
+        id: coupon.id,
+        code: coupon.code,
+        title: coupon.name,
+        description: coupon.description,
+        discountAmount: potentialDiscount,
+        minBookingAmount: coupon.minBookingAmount,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountAmount
+      };
+    }).filter(v => v !== null);
+
+    const response = {
+      paymentSummary: {
+        rentalCost,
+        insurance,
+        discount,
+        toBePaidNow,
+        toBePaidAtPickup: remainingAmount,
+        totalPayment
+      },
+      vouchers
+    };
+
+    return sendSuccess(res, response, "Booking summary retrieved successfully");
+  }
+);
+
+export const applyCouponToBookingSummary = asyncHandler<AuthenticatedRequest>(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { startDate, endDate, couponCode, startTime, endTime } = req.body;
+    const carId = req.params.id;
+
+    if (!carId || !startDate || !endDate || !couponCode) {
+      throw ApiError.badRequest("Car ID, start date, end date, and coupon code are required");
+    }
+
+    // Helper to combine date and time
+    // Helper to combine date and time
+    const combineDateAndTime = (dateStr: string, timeStr?: string) => {
+      const time = timeStr || "00:00:00";
+      return new Date(`${dateStr}T${time}`);
+    };
+
+    const start = combineDateAndTime(startDate, startTime);
+    const end = combineDateAndTime(endDate, endTime);
+    const parsedCarId = parseInt(String(carId));
+
+    if (isNaN(parsedCarId)) {
+      throw ApiError.badRequest("Invalid Car ID");
+    }
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw ApiError.badRequest("Invalid date format");
+    }
+
+    if (start >= end) {
+      throw ApiError.badRequest("End date must be after start date");
+    }
+
+    // Fetch car details
+    const car = await db
+      .select()
+      .from(carModel)
+      .where(eq(carModel.id, parsedCarId))
+      .limit(1);
+
+    if (!car || car.length === 0) {
+      throw ApiError.notFound("Car not found");
+    }
+
+    const carData = car[0];
+
+    // Calculate duration
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const totalHours = diffTime / (1000 * 60 * 60);
+
+    let fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+
+    // Minimum 1 day if duration is 0
+    if (fullDays === 0 && remainingHours === 0) {
+      fullDays = 1;
+    }
+
+    const pricePerDay = Number(carData.discountprice) || Number(carData.price) || 0;
+    // Helper to get typed car data with halfdayprice which might not be in the inferred type yet if not regenerated
+    const halfDayPrice = Number((carData as any).halfdayprice) || 0;
+
+    let rentalCost = fullDays * pricePerDay;
+
+    if (remainingHours > 0) {
+      if (remainingHours <= 12) {
+        // Half day
+        rentalCost += halfDayPrice > 0 ? halfDayPrice : pricePerDay / 2;
+      } else {
+        // Full day
+        rentalCost += pricePerDay;
+      }
+    }
+
+    const insurance = Number(carData.insuranceAmount) || 0;
+
+    // Validate Coupon
+    const activeCoupons = await db
+      .select()
+      .from(couponTable)
+      .where(
+        and(
+          eq(couponTable.code, couponCode),
+          eq(couponTable.status, "active"),
+          eq(couponTable.isActive, true),
+          lte(couponTable.startDate, new Date()),
+          gte(couponTable.endDate, new Date())
+        )
+      );
+
+    if (!activeCoupons || activeCoupons.length === 0) {
+      throw ApiError.badRequest("Invalid or expired coupon code");
+    }
+
+    const coupon = activeCoupons[0];
+
+    // Check usage limit
+    if (coupon.usageLimit !== null && coupon.usageCount >= coupon.usageLimit) {
+      throw ApiError.badRequest("Coupon usage limit reached");
+    }
+
+    // Check min booking amount
+    if (coupon.minBookingAmount && rentalCost < Number(coupon.minBookingAmount)) {
+      throw ApiError.badRequest(`Minimum booking amount for this coupon is ${coupon.minBookingAmount}`);
+    }
+
+    // Check per user limit
+    if (coupon.perUserLimit) {
+      const userCouponUsage = await db
+        .select({ count: sql`count(*)` })
+        .from(bookingsTable)
+        .where(
+          and(
+            eq(bookingsTable.userId, req.user.id),
+            eq(bookingsTable.couponId, coupon.id)
+          )
+        );
+
+      const usageCount = parseInt(userCouponUsage[0]?.count?.toString() || "0");
+      if (usageCount >= coupon.perUserLimit) {
+        throw ApiError.badRequest(`You have already used this coupon ${coupon.perUserLimit} time(s)`);
+      }
+    }
+
+    // Calculate discount
+    let discountAmount = 0;
+    if (coupon.discountType === "percentage") {
+      discountAmount = (rentalCost * Number(coupon.discountAmount)) / 100;
+      if (coupon.maxDiscountAmount && discountAmount > Number(coupon.maxDiscountAmount)) {
+        discountAmount = Number(coupon.maxDiscountAmount);
+      }
+    } else {
+      discountAmount = Number(coupon.discountAmount);
+    }
+
+    // Cap discount at rental cost
+    if (discountAmount > rentalCost) {
+      discountAmount = rentalCost;
+    }
+
+    // Calculate Final Totals
+    const totalBeforeDiscount = rentalCost + insurance;
+    const totalPayment = totalBeforeDiscount - discountAmount;
+
+    const advancePercentage = 0.30;
+    const toBePaidNow = totalPayment * advancePercentage;
+    const remainingAmount = totalPayment - toBePaidNow;
+
+    const response = {
+      paymentSummary: {
+        rentalCost,
+        insurance,
+        discount: discountAmount,
+        toBePaidNow,
+        toBePaidAtPickup: remainingAmount,
+        totalPayment
+      },
+      appliedCoupon: {
+        code: coupon.code,
+        discountAmount: discountAmount
+      }
+    };
+
+    return sendSuccess(res, response, "Coupon applied successfully");
+  }
+);
+
+export const getCarBookedDates = asyncHandler<Request>(
+  async (req: Request, res: Response) => {
+    const carId = req.params.id;
+
+    if (!carId || isNaN(Number(carId))) {
+      throw ApiError.badRequest("Invalid Car ID");
+    }
+
+    const bookings = await db
+      .select({
+        startDate: bookingsTable.startDate,
+        endDate: bookingsTable.endDate,
+      })
+      .from(bookingsTable)
+      .where(
+        and(
+          eq(bookingsTable.carId, parseInt(carId)),
+          sql`${bookingsTable.status} != 'cancelled'`
+        )
+      );
+
+    return sendSuccess(res, bookings, "Booked dates retrieved successfully");
+  }
+);
+
+export const uploadBookingImages = asyncHandler<AuthenticatedRequest>(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { bookingId } = req.params;
+    const { carConditionImages, toolImages } = req.body;
+
+    if (!bookingId || isNaN(Number(bookingId))) {
+      throw ApiError.badRequest("Invalid Booking ID");
+    }
+
+    if (!carConditionImages && !toolImages) {
+      throw ApiError.badRequest("No images provided to upload");
+    }
+
+    const booking = await db.query.bookingsTable.findFirst({
+      where: (bookingsTable, { eq }) => eq(bookingsTable.id, parseInt(bookingId)),
+    });
+
+    if (!booking) {
+      throw ApiError.notFound("Booking not found");
+    }
+
+    // Verify ownership (or admin/pic role) - for now assuming user must own booking or be admin/pic
+    // Simpler check: if user is not admin/pic/owner?
+    // Let's stick to owner for now or rely on middleware. 
+    // Usually only the user or PIC uploads these.
+
+    // allow partial updates
+    const updateData: any = {};
+    if (carConditionImages && Array.isArray(carConditionImages)) {
+      updateData.carConditionImages = carConditionImages;
+    }
+    if (toolImages && Array.isArray(toolImages)) {
+      updateData.toolImages = toolImages;
+    }
+
+    const updatedBooking = await db
+      .update(bookingsTable)
+      .set(updateData)
+      .where(eq(bookingsTable.id, parseInt(bookingId)))
+      .returning();
+
+    return sendSuccess(res, updatedBooking[0], "Booking images updated successfully");
   }
 );

@@ -21,7 +21,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.1",
     "@types/multer": "^2.0.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",

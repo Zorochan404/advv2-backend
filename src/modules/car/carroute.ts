@@ -93,6 +93,7 @@ router.post(
 
 // Parameterized routes (after specific routes)
 router.get("/getcar/:id", validateRequest(idParamSchema), getCarById);
+
 router.get(
   "/carbyparking/:id",
   validateRequest({ ...idParamSchema, ...paginationQuerySchema }),
@@ -104,6 +105,7 @@ router.get(
   validateRequest({ ...idParamSchema, ...paginationQuerySchema }),
   getCarByParkingIdbyuser
 );
+
 router.put(
   "/:id",
   verifyJWT,
@@ -112,6 +114,7 @@ router.put(
   validateRequest({ ...idParamSchema, ...carUpdateSchema }),
   updateCar
 );
+
 router.delete(
   "/delete/:id",
   verifyJWT,

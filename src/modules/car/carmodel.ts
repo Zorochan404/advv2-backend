@@ -81,10 +81,11 @@ export const carModel = pgTable("car", {
   color: varchar("color", { length: 255 }),
   price: integer("price"),
   discountprice: integer("discountprice"),
+  halfdayprice: integer("halfdayprice").default(0),
   fineperhour: integer("fineperhour").default(0),
   extensionperhour: integer("extensionperhour").default(0),
   // Insurance amount for the car (default 500)  
-  insuranceAmount: decimal("insurance_amount", { precision: 10, scale: 2 }).notNull().default("500"),
+  insuranceAmount: decimal("insurance_amount", { precision: 10, scale: 2 }).notNull().default("0"),
   // Restored critical fields
   rcnumber: varchar("rcnumber", { length: 255 }),
   rcimg: varchar("rcimg", { length: 255 }),

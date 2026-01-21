@@ -1,7 +1,8 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
 import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import dotenv from "dotenv";
+
+// ===== Models & Relations =====
 import {
   carModel,
   carRelations,
@@ -46,14 +47,15 @@ import {
 
 dotenv.config();
 
-// For Drizzle Studio and migrations
-const pool = new Pool({
+// ===== PostgreSQL Pool (TCP – production safe) =====
+export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false,
+    rejectUnauthorized: false, // required for Neon
   },
 });
 
+// ===== Drizzle Schema =====
 const schema = {
   carModel,
   carCatalogTable,
@@ -68,7 +70,8 @@ const schema = {
   picVerificationTable,
   paymentsTable,
   paymentSummaryTable,
-  // Include all relations
+
+  // Relations
   carRelations,
   carCatalogRelations,
   reviewRelations,
@@ -85,9 +88,5 @@ const schema = {
   bookingPaymentRelations,
 };
 
-// For serverless operations
-const sql = neon(process.env.DATABASE_URL!);
-export const db = drizzle({ client: sql, schema });
-
-// Export pool for Drizzle Studio
-export { pool };
+// ===== Drizzle DB Instance =====
+export const db = drizzle(pool, { schema });

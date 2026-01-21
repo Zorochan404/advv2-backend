@@ -241,8 +241,10 @@ export const carLocationFilterSchema = z.object({
   limit: z.coerce.number().positive().max(50).default(10),
   page: z.coerce.number().positive().default(1),
   // Date filtering
-  startDate: z.string().datetime("Invalid start date format").optional(),
-  endDate: z.string().datetime("Invalid end date format").optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date format (YYYY-MM-DD)").optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date format (YYYY-MM-DD)").optional(),
+  startTime: z.string().optional(), // HH:MM
+  endTime: z.string().optional(), // HH:MM
   // Category filtering - supports both string (query) and array (JSON body)
   categories: z.union([
     z.string(), // Comma-separated categories from query params
@@ -370,8 +372,11 @@ export const reviewQuerySchema = paginationQuerySchema.extend({
 // Booking schemas
 export const bookingCreateSchema = z.object({
   carId: z.number().positive("Invalid car ID"),
-  startDate: z.string().datetime("Invalid start date"),
-  endDate: z.string().datetime("Invalid end date"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date format (YYYY-MM-DD)"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date format (YYYY-MM-DD)"),
+  startTime: z.string().optional(), // HH:MM
+  endTime: z.string().optional(), // HH:MM
+  couponCode: z.string().optional(),
   pickupParkingId: z.number().positive("Invalid pickup parking ID").optional(),
   dropoffParkingId: z
     .number()
@@ -446,7 +451,7 @@ export const topupUpdateSchema = topupCreateSchema.partial();
 
 export const topupApplySchema = z.object({
   bookingId: z.coerce.number().positive("Invalid booking ID"),
-  topupId: z.coerce.number().positive("Invalid topup ID"),
+  extensionTime: z.coerce.number().positive("Invalid extension time"),
   paymentReferenceId: z.string().min(1, "Payment reference ID is required"),
 });
 

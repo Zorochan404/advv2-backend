@@ -1,0 +1,1 @@
+ALTER TABLE "booking_topups" ALTER COLUMN "topup_id" DROP NOT NULL;

@@ -120,6 +120,20 @@
       "when": 1768027182067,
       "tag": "0016_old_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1768286171173,
+      "tag": "0017_silky_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1768650914451,
+      "tag": "0018_late_baron_zemo",
+      "breakpoints": true
     }
   ]
 }

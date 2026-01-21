@@ -3,7 +3,7 @@ import { carModel, carCatalogTable } from "./carmodel";
 import { db } from "../../drizzle/db";
 import { ApiError } from "../utils/apiError";
 import { asyncHandler } from "../utils/asyncHandler";
-import { and, eq, like, or, sql, gte, lte, asc, desc, notInArray, inArray } from "drizzle-orm";
+import { and, eq, like, or, sql, gte, lte, asc, desc, notInArray, inArray, lt, gt, isNotNull } from "drizzle-orm";
 import { reviewModel } from "../review/reviewmodel";
 import { parkingTable } from "../parking/parkingmodel";
 import { bookingsTable } from "../booking/bookingmodel";
@@ -162,6 +162,8 @@ export const getNearestAvailableCars = asyncHandler(
       page = 1,
       startDate,
       endDate,
+      startTime,
+      endTime,
       categories,
       category,
       minPrice,
@@ -201,6 +203,19 @@ export const getNearestAvailableCars = asyncHandler(
 
       // Add date filtering (exclude cars with conflicting bookings)
       if (startDate && endDate) {
+        // Helper to combine date and time
+        const combineDateAndTime = (dateStr: string, timeStr?: string) => {
+          const time = timeStr || "00:00:00";
+          return new Date(`${dateStr}T${time}`);
+        };
+
+        const searchStart = combineDateAndTime(startDate as string, startTime as string);
+        const searchEnd = combineDateAndTime(endDate as string, endTime as string);
+
+        if (isNaN(searchStart.getTime()) || isNaN(searchEnd.getTime())) {
+          throw ApiError.badRequest("Invalid date format");
+        }
+
         const activeBookingCarIds = await db
           .select({ carId: bookingsTable.carId })
           .from(bookingsTable)
@@ -209,9 +224,16 @@ export const getNearestAvailableCars = asyncHandler(
               sql`${bookingsTable.status} IN ('pending', 'advance_paid', 'confirmed', 'active')`,
               or(
                 // Booking starts before our end date and ends after our start date
-                sql`${bookingsTable.startDate} < ${endDate} AND ${bookingsTable.endDate} > ${startDate}`,
+                // Note: Drizzle/Postgres handles Date objects correctly in comparisons
+                and(
+                  lt(bookingsTable.startDate, searchEnd),
+                  gt(bookingsTable.endDate, searchStart)
+                ),
                 // Booking has extension that conflicts
-                sql`${bookingsTable.extensionTill} IS NOT NULL AND ${bookingsTable.extensionTill} > ${startDate}`
+                and(
+                  isNotNull(bookingsTable.extensionTill),
+                  gt(bookingsTable.extensionTill, searchStart)
+                )
               )
             )
           );

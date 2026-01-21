@@ -49,7 +49,6 @@ export const bookingTopupTable = pgTable("booking_topups", {
     .notNull()
     .references(() => bookingsTable.id, { onDelete: "cascade" }),
   topupId: integer("topup_id")
-    .notNull()
     .references(() => topupTable.id, { onDelete: "cascade" }),
 
   // Usage details

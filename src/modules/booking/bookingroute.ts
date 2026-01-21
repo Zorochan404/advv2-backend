@@ -32,15 +32,19 @@ import {
   getUserBookingsFormatted,
   getDetailedBookingById,
   getAllBookings,
+  getbookingsummary,
+  applyCouponToBookingSummary,
+  getCarBookedDates,
+  uploadBookingImages
 } from "./bookingcontroller";
 import { verifyJWT } from "../middleware/auth";
-import { 
-  requirePermission, 
-  requireResourceAccess, 
-  Permission, 
+import {
+  requirePermission,
+  requireResourceAccess,
+  Permission,
   requireUser,
   requirePIC,
-  requireAdmin 
+  requireAdmin
 } from "../middleware/rbac";
 import {
   validateRequest,
@@ -81,7 +85,6 @@ router.get(
 );
 
 // User routes
-
 router.get(
   "/user",
   verifyJWT,
@@ -92,24 +95,24 @@ router.get(
 
 // Get user's own bookings using JWT (no user ID needed)
 router.get(
-  "/my-bookings", 
-  verifyJWT, 
-  requirePermission(Permission.READ_BOOKING), 
+  "/my-bookings",
+  verifyJWT,
+  requirePermission(Permission.READ_BOOKING),
   getUserBookingsWithStatus
 );
 
 // Get user's formatted bookings (current and past)
 router.get(
-  "/user/formatted", 
-  verifyJWT, 
-  requirePermission(Permission.READ_BOOKING), 
+  "/user/formatted",
+  verifyJWT,
+  requirePermission(Permission.READ_BOOKING),
   getUserBookingsFormatted
 );
 
 // Get detailed booking by ID (user can only see their own bookings)
 router.get(
-  "/detail/:id", 
-  verifyJWT, 
+  "/detail/:id",
+  verifyJWT,
   requirePermission(Permission.READ_BOOKING),
   getDetailedBookingById
 );
@@ -149,8 +152,8 @@ router.get(
 
 // Get comprehensive booking status (requires authentication)
 router.get(
-  "/status/:bookingId", 
-  verifyJWT, 
+  "/status/:bookingId",
+  verifyJWT,
   requirePermission(Permission.READ_BOOKING),
   getBookingStatus
 );
@@ -168,9 +171,9 @@ router.get(
 
 // Confirm car pickup (PIC confirms car has been taken from parking lot)
 router.post(
-  "/confirm-pickup", 
-  verifyJWT, 
-  requirePermission(Permission.CONFIRM_PICKUP), 
+  "/confirm-pickup",
+  verifyJWT,
+  requirePermission(Permission.CONFIRM_PICKUP),
   confirmCarPickup
 );
 
@@ -185,9 +188,9 @@ router.get(
 
 // Get all bookings for PIC's parking lot
 router.get(
-  "/pic/bookings", 
-  verifyJWT, 
-  requirePermission(Permission.READ_BOOKING), 
+  "/pic/bookings",
+  verifyJWT,
+  requirePermission(Permission.READ_BOOKING),
   getPICBookings
 );
 
@@ -201,16 +204,16 @@ router.get(
 
 // Get PIC by entity (car, booking, or parking) - Must come after /pic/* routes
 router.get(
-  "/pic-by-entity", 
-  verifyJWT, 
+  "/pic-by-entity",
+  verifyJWT,
   requirePermission(Permission.READ_BOOKING),
   getPICByEntity
 );
 
 // Extension and topup routes
 router.get(
-  "/:bookingId/overdue", 
-  verifyJWT, 
+  "/:bookingId/overdue",
+  verifyJWT,
   requirePermission(Permission.READ_BOOKING),
   checkBookingOverdue
 );
@@ -223,16 +226,16 @@ router.post(
 );
 // Get booking timeline status (replaces late fee calculation)
 router.get(
-  "/:bookingId/timeline-status", 
-  verifyJWT, 
+  "/:bookingId/timeline-status",
+  verifyJWT,
   requirePermission(Permission.READ_BOOKING),
   getBookingTimelineStatus
 );
 
 // Confirm car return (PIC confirms car has been returned to parking lot)
 router.post(
-  "/confirm-return", 
-  verifyJWT, 
+  "/confirm-return",
+  verifyJWT,
   requirePermission(Permission.CONFIRM_RETURN),
   validateRequest(bookingCarReturnSchema),
   confirmCarReturn
@@ -296,6 +299,29 @@ router.put(
   rescheduleBooking
 );
 
+// Get booking summary
+router.post(
+  "/summary/:id",
+  verifyJWT,
+  requirePermission(Permission.READ_BOOKING),
+  getbookingsummary
+);
+
+// Apply coupon to booking summary
+router.post(
+  "/summary/apply-coupon/:id",
+  verifyJWT,
+  requirePermission(Permission.READ_BOOKING),
+  applyCouponToBookingSummary
+);
+
+// Get booked dates for a car
+router.get(
+  "/car/:id/booked-dates",
+  verifyJWT,
+  getCarBookedDates
+);
+
 // Generic booking routes (must come after all specific routes to avoid conflicts)
 router.get(
   "/:id",
@@ -317,6 +343,26 @@ router.delete(
   requirePermission(Permission.DELETE_BOOKING),
   validateRequest(idParamSchema),
   deletebooking
+);
+
+router.get(
+  "/user/booking",
+  verifyJWT,
+  requirePermission(Permission.READ_BOOKING),
+  validateRequest(paginationQuerySchema),
+  getBookingByDateRange
+);
+
+
+
+
+
+// Upload booking images (car condition / tools)
+router.post(
+  "/:bookingId/upload-images",
+  verifyJWT,
+  requirePermission(Permission.UPDATE_BOOKING),
+  uploadBookingImages
 );
 
 export default router;
