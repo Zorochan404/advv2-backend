@@ -48,11 +48,12 @@ import {
 dotenv.config();
 
 // ===== PostgreSQL Pool (TCP – production safe) =====
-export const pool = new Pool({
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false, // required for Neon
-  },
+  ssl: { rejectUnauthorized: false },
+  connectionTimeoutMillis: 10000, // ⬅️ important
+  idleTimeoutMillis: 30000,
+  max: 10
 });
 
 // ===== Drizzle Schema =====
